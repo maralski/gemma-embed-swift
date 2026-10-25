@@ -185,40 +185,32 @@ highest unrelated cosine is 0.822 (the green hills and the sunflower field).
 Measured on 2026-10-25 on the same Apple M3 Max as the text numbers, over 153 social media feed
 pictures of 2026-10-23 (a private corpus, not in the repository; real JPEGs, 480 to 1280 pixels
 wide, 188 vision tokens on average), one picture per GPU batch as the default batching runs
-them, with `gemma-embed --bench-images --batch-size 1`, the two builds alternating under a GPU
-lock, three rounds each:
+them, with `gemma-embed --bench-images --batch-size 1` under a GPU lock, three rounds:
 
 | Configuration | Images per second (median of 3) | Seconds for 153 images | GPU seconds |
 |---|---|---|---|
 | GemmaEmbed 0.3.0 | 10.40 | 14.72 | 14.48 |
-| GemmaEmbed 0.2.0 | 8.49 | 18.02 | 17.89 |
 
-Image vectors stay within 2e-6 of 0.2.0's. Image parity with llama-server is in Image parity
+Image parity with llama-server is in Image parity
 above (min cosine 0.9999985 over the 30 fixtures). A feed picture takes about 95 ms of GPU time,
 almost all of it the vision tower; the text tower over its rows takes about 3 ms.
 
-The rest of this section was measured on 2026-10-19 with GemmaEmbed 0.2.0, over the 30 fixture
-images of that release, an earlier set since replaced (average 216 vision tokens each, 220 rows
-through the text tower), with `gemma-embed --bench-images --runs 5`.
-Other processes kept the CPU load average between 26 and 80 during the runs, but the GPU was
-otherwise idle: `GEMMA_EMBED_TRACE=1` showed a scheduled-start lag of 0.2 ms on almost every
-command buffer and 9.7 ms at worst. Wall time includes JPEG and PNG decoding and resizing on the
-CPU (12 ms per 1600 by 1600 JPEG, run in parallel). GPU time is the command buffer's own
-duration over the same batches.
+Against llama.cpp, on the same 153 pictures at the same cap of 256, twelve alternating rounds
+on a loaded machine (CPU load moved every figure by a factor of two or more, so treat the ratio
+as approximate). Wall time includes image decoding on the CPU for both engines.
+`scripts/compare_llamacpp.py` reproduces it; [COMPARISON.md](COMPARISON.md) has the details.
 
-| Configuration | Images per second (median of 5) | Seconds for 30 images | GPU seconds |
-|---|---|---|---|
-| GemmaEmbed 0.2.0, one image per GPU batch | 4.71 | 6.37 | 6.34 |
-| GemmaEmbed 0.2.0, 2 images per batch | 4.37 | 6.87 | 6.49 |
-| GemmaEmbed 0.2.0, 4 images per batch | 3.99 | 7.51 | 7.17 |
-| GemmaEmbed 0.2.0, 8 images per batch | 3.28 to 3.73 (two runs) | 8.05 to 9.14 | 6.76 to 7.71 |
-| llama.cpp 0.7.0-dev build 11716, `llama-server --embedding --mmproj`, 1 image per request | 3.48 | 8.62 | |
-| llama.cpp, same build, 8 images per request | 4.90 | 6.13 | |
+| Configuration | Images per second, median of 12 rounds | Range |
+|---|---|---|
+| GemmaEmbed 0.3.0, one image per GPU batch | 8.46 | 4.48 to 11.04 |
+| GemmaEmbed 0.3.0, batched by patch count (`--batch-size auto`) | 7.84 | 3.00 to 11.64 |
+| llama.cpp 0.7.0-dev build 11716, `llama-server --embedding --mmproj`, 1 image per request | 5.91 | 2.87 to 7.91 |
+| llama.cpp, same build, 8 images per request | 6.04 | 3.03 to 8.29 |
 
 The GPU time itself grows with the batch: packing more images into one forward makes the vision
-GEMMs slower, not faster, and the trend is monotonic from 1 to 8. The likely cause is the
+GEMMs slower, not faster, from 1 to 8 images per batch. The likely cause is the
 activation buffers outgrowing the on-chip cache (a batch of 8 full-size images is 18,432 patch
-rows, and its 3072-wide FFN activations take 226 MB): profiled on 0.3.0, a batch of 8 pictures
+rows, and its 3072-wide FFN activations take 226 MB): profiled, a batch of 8 pictures
 runs 17 percent slower than the sum of its kernels timed alone, while one picture runs faster
 than its kernel sum. Budgets of 8192 to 32768 patches measured 4 to 6 percent slower than 4096
 and cost 2 to 4 times the memory. The
@@ -334,22 +326,20 @@ regenerates the text fixtures from llama.cpp.
 ## Performance
 
 Measured on 2026-10-25 on an Apple M3 Max (40 GPU cores, 128 GB) running macOS 26, Xcode 26.3,
-under a GPU lock with no other GPU work and a load average of 3.3, five alternating runs per
-build. The corpus is 285 social media posts of 2026-10-17, a private set that is not in the
-repository (gist plus text cut at 2000 characters, document prefix), 41,675 tokens in all, 146
-tokens per post on average, longest 604.
+under a GPU lock with no other GPU work and a load average of 3.3, five runs. The corpus is 285
+social media posts of 2026-10-17, a private set that is not in the repository (gist plus text
+cut at 2000 characters, document prefix), 41,675 tokens in all, 146 tokens per post on average,
+longest 604.
 
 | Engine | Posts per second | Seconds for 285 posts | Tokens per second |
 |---|---|---|---|
 | GemmaEmbed 0.3.0 | 176.4 | 1.62 (1.61 to 1.66) | 25,790 |
-| GemmaEmbed 0.2.0 | 117.7 | 2.42 (2.42 to 2.46) | 17,220 |
 | llama.cpp 0.7.0-dev build 11716, `llama-server --embedding -np 8 -ub 8192`, 32 texts per request | 118.3 | 2.41 | 17,300 |
 | llama.cpp, same build, `-np 1` (one sequence at a time) | 59.6 | 4.78 | 8,720 |
 
 GemmaEmbed 0.3.0 is 1.49 times faster than llama.cpp's best configuration and 2.96 times faster
 than its single-slot default, with the same parity (min cosine 0.9999988 against llama.cpp over
-the 40 fixtures) and vectors within 3e-7 of 0.2.0's. A single 22-token query takes 7.4 ms wall,
-down from 15.2 ms in 0.2.0. The GEMMs take most of the GPU time and run at 7.6 to 8.8 TFLOPS fp32
+the 40 fixtures). A single 22-token query takes 7.4 ms wall. The GEMMs take most of the GPU time and run at 7.6 to 8.8 TFLOPS fp32
 in a sustained microbench; attention takes about an eighth.
 
 Measuring on a shared machine: GPU time of short command buffers reads high because the GPU runs
