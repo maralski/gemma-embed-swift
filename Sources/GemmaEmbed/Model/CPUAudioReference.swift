@@ -200,7 +200,6 @@ final class CPUAudioReference {
         trace?("encoder_in", x)
 
         for (l, w) in weights.layers.enumerated() {
-            // First half-step feed-forward.
             var h = CPUReference.rmsNorm(x, width: d, weight: matrix(w.ffnNorm), eps: eps)
             trace?("ffn1_normed-\(l)", h)
             var up = linear(h, rows: T, w.ffnUp)
@@ -213,7 +212,6 @@ final class CPUAudioReference {
             for i in 0..<x.count { x[i] += config.feedForwardResidualScale * down[i] }
             trace?("after_ffn1-\(l)", x)
 
-            // Attention.
             h = CPUReference.rmsNorm(x, width: d, weight: matrix(w.attnPreNorm), eps: eps)
             trace?("attn_normed-\(l)", h)
             var q = linear(h, rows: T, w.wq)
@@ -240,7 +238,6 @@ final class CPUAudioReference {
             for i in 0..<x.count { x[i] += o[i] }
             trace?("after_attn-\(l)", x)
 
-            // Convolution module.
             h = CPUReference.rmsNorm(x, width: d, weight: matrix(w.convPreNorm), eps: eps)
             trace?("conv_normed-\(l)", h)
             let pw1 = linear(h, rows: T, w.convPointwise1)
@@ -260,7 +257,6 @@ final class CPUAudioReference {
             for i in 0..<x.count { x[i] += pw2[i] }
             trace?("after_conv-\(l)", x)
 
-            // Second half-step feed-forward.
             h = CPUReference.rmsNorm(x, width: d, weight: matrix(w.ffnNorm1), eps: eps)
             trace?("ffn2_normed-\(l)", h)
             up = linear(h, rows: T, w.ffnUp1)
