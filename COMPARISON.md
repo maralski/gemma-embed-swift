@@ -57,7 +57,7 @@ default batch size and logs the cap when it loads. `-ub` raises it, up to 1120. 
 ### Text batches
 
 Source: README, Performance. Measured on 2026-10-25 under a GPU lock with no other GPU work and
-a load average of 3.3, five alternating runs per build. The corpus is 285 social media posts of
+a load average of 3.3, five runs. The corpus is 285 social media posts of
 2026-10-17, a private set that is not in the repository. It has 41,675 tokens in all, 146 tokens
 per post on average, and the longest post has 604. llama.cpp gets 32 texts per request to
 `/v1/embeddings`.
@@ -69,8 +69,7 @@ per post on average, and the longest post has 604. llama.cpp gets 32 texts per r
 | llama.cpp, same flags with `-np 1` (one sequence at a time) | 59.6 | 4.78 | 8,720 |
 
 GemmaEmbed 0.3.0 is 1.49 times faster than llama.cpp's best configuration here and 2.96 times
-faster than one slot. GemmaEmbed 0.2.0 ran at 117.7 posts per second on the same corpus, level
-with llama.cpp's best. The changelog lists the kernel changes behind the 0.3.0 gain.
+faster than one slot.
 
 With `-np 8 -c 8192`, llama-server gives each slot 1024 tokens of context. That fits this corpus.
 A longer text needs a larger `-c`.
@@ -99,34 +98,18 @@ GemmaEmbed was faster in all 12 rounds. Within a round, llama-server with 8 slot
 times as long as GemmaEmbed (median of the 12 per-round ratios, interquartile range 1.47 to
 1.90).
 
-The rounds alternated the engines' order under the GPU lock and paused while another session's
-test run was going. A test run still started during 7 of the 84 timed steps. Other work kept the
+The rounds alternated the engines' order under the GPU lock and paused while a test run was
+going. A test run still started during 7 of the 84 timed steps. Other work kept the
 load average between 4.3 and above 40 during the runs, against 3.3 for the README's numbers. The
 load is the likely reason GemmaEmbed's median here is 8.3 ms and not the README's 7.4 ms, though
 that was not tested.
 
 ### Images
 
-The README has one image comparison against llama.cpp. It dates from 2026-10-19 and GemmaEmbed
-0.2.0. It used the 30 fixture images of that release, an earlier set since replaced, with 216
-vision tokens each on average, five runs, and wall time including image decoding (README, Image
-performance).
-
-| Configuration | Images per second | Seconds for 30 images |
-|---|---|---|
-| GemmaEmbed 0.2.0, one image per GPU batch | 4.71 | 6.37 |
-| llama.cpp build 11716, `llama-server --embedding --mmproj`, 1 image per request | 3.48 | 8.62 |
-| llama.cpp, same build, 8 images per request | 4.90 | 6.13 |
-
-At 0.2.0, llama.cpp with 8 images per request was slightly faster than GemmaEmbed. GemmaEmbed
-0.3.0 embeds images 1.22 times faster than 0.2.0, at 10.40 against 8.49 images per second on 153
-social media feed pictures (README, Image performance). The README has no llama.cpp figure for
-0.3.0, so this page measured one, in the same runs as the query latency.
-
 The pictures are the README's 153 feed JPEGs, 480 to 1280 pixels wide, a private set that is
 not in the repository. Both engines used the cap of 256 and processed the same 28,740 rows,
-counted by `gemma-embed --bench-images` and by llama-server's `usage.prompt_tokens`. GemmaEmbed ran `--bench-images` once per round. Its
-time includes decoding and resizing on the CPU. llama-server ran with its default flags plus
+counted by `gemma-embed --bench-images` and by llama-server's `usage.prompt_tokens`.
+GemmaEmbed ran `--bench-images` once per round. Its time includes decoding and resizing on the CPU. llama-server ran with its default flags plus
 `--embedding --mmproj`, which gave 4 slots. It received each picture as a base64 data URL, 1 or 8
 per request, and its time covers the whole folder.
 
