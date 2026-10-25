@@ -16,6 +16,8 @@ public enum GemmaEmbedError: Error, CustomStringConvertible, Sendable {
     case gpuFailure(String)
     case imageDecoding(String)
     case imageEncoderNotLoaded
+    case audioDecoding(String)
+    case audioEncoderNotLoaded
     case cancelled
 
     public var description: String {
@@ -35,6 +37,8 @@ public enum GemmaEmbedError: Error, CustomStringConvertible, Sendable {
         case .gpuFailure(let reason): return "GPU execution failed: \(reason)"
         case .imageDecoding(let reason): return "cannot decode image: \(reason)"
         case .imageEncoderNotLoaded: return "no image encoder is loaded; pass the mmproj GGUF when loading the model"
+        case .audioDecoding(let reason): return "cannot decode audio: \(reason)"
+        case .audioEncoderNotLoaded: return "no audio encoder is loaded; pass the mmproj GGUF as LoadOptions.audioEncoder when loading the model"
         case .cancelled: return "embedding was cancelled"
         }
     }
