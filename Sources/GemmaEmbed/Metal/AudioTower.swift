@@ -266,10 +266,32 @@ extension Kernels {
     private func elementCount(_ rows: Int, _ width: Int) -> MTLSize { MTLSize(width: rows * width, height: 1, depth: 1) }
     private var elementGroup: MTLSize { MTLSize(width: 256, height: 1, depth: 1) }
 
+    /// The implicit-GEMM subsampling tile, `BMxBNxBK_simdgroups`; 32 rows with 4 simdgroups timed
+    /// within noise of 64 rows and ahead of 16-row and 2-simdgroup tiles at 238 and 740 tokens.
+    static let subsampleGemmTile = (rows: 32, simdgroups: 4, name: "32x32x32_4")
+
+    /// A 3x3 stride-2 pad-1 convolution over `x[(inOffset + t) * inFreq + f][inChannels]` into
+    /// `out[(outOffset + ot) * outFreq + of][outChannels]`, with LayerNorm over the channels, the
+    /// norm weight and ReLU. Layers with 32 outputs and a channel count the GEMM tiles divide run
+    /// as an implicit GEMM; the rest tap by tap.
     func audioSubsample(_ x: MTLBuffer, weight: WeightTensor, norm: WeightTensor, out: MTLBuffer, inTime: Int, inFreq: Int, inChannels: Int,
                         inOffset: Int, outChannels: Int, outOffset: Int, eps: Float) throws {
         precondition(weight.type == .f32 && norm.type == .f32 && outChannels % 32 == 0 && outChannels <= 1024)
         let outTime = (inTime - 1) / 2 + 1, outFreq = (inFreq - 1) / 2 + 1
+        if outChannels == 32 && inChannels % 32 == 0 {
+            let tile = Kernels.subsampleGemmTile
+            _ = try bindPipeline("audio_subsample_gemm_\(tile.name)")
+            encoder.setBuffer(x, offset: 0, index: 0)
+            encoder.setBuffer(weights, offset: weight.fileOffset, index: 1)
+            encoder.setBuffer(weights, offset: norm.fileOffset, index: 2)
+            encoder.setBuffer(out, offset: 0, index: 3)
+            setParams(AudioConvParams(inTime: UInt32(inTime), inFreq: UInt32(inFreq), inChannels: UInt32(inChannels), outTime: UInt32(outTime),
+                                      outFreq: UInt32(outFreq), outChannels: UInt32(outChannels), inOffset: UInt32(inOffset), outOffset: UInt32(outOffset), eps: eps), index: 4)
+            let positions = outTime * outFreq
+            dispatchGroups(MTLSize(width: (positions + tile.rows - 1) / tile.rows, height: 1, depth: 1),
+                           perGroup: MTLSize(width: 32 * tile.simdgroups, height: 1, depth: 1))
+            return
+        }
         _ = try bindPipeline("audio_subsample")
         encoder.setBuffer(x, offset: 0, index: 0)
         encoder.setBuffer(weights, offset: weight.fileOffset, index: 1)

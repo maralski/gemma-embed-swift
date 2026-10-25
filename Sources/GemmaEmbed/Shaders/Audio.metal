@@ -42,6 +42,7 @@ struct AudioAttentionParams {
 // `x[(inOffset + t) * inFreq + f][inChannels]`, one thread per output channel, followed by a
 // LayerNorm over the channels, the norm weight and ReLU. ggml runs the im2col in fp16, so every
 // input value is rounded to half first. The kernel is `[outChannels][inChannels][3][3]` fp32.
+// The 1->128 layer runs here; the 128->32 layer runs as the implicit GEMM below.
 kernel void audio_subsample(device const float* x [[buffer(0)]],
                             device const float* w [[buffer(1)]],
                             device const float* norm [[buffer(2)]],
@@ -88,6 +89,114 @@ kernel void audio_subsample(device const float* x [[buffer(0)]],
     const float scale = 1.0f / precise::sqrt(variance + p.eps);
     out[((p.outOffset + ot) * p.outFreq + of) * p.outChannels + oc] = max(0.0f, d * scale * norm[oc]);
 }
+
+// The same convolution as an implicit GEMM for the 128->32 layer: Y[M, 32] = patch[M, K] * W[32, K]^T
+// with M the output positions in (time, freq) order and K = 9 * inChannels in (tap, channel) order,
+// so each row's K slice for one tap is a contiguous channel run of `x`. The patch tile is gathered
+// into threadgroup memory on the fly (fp16-rounded, zero outside the input) instead of an im2col
+// buffer, the weight tile is read from the `[outChannels][inChannels][3][3]` layout with a stride-9
+// gather, and the LayerNorm, norm weight and ReLU run over the staged output tile, one output row
+// per simdgroup pass. BN is fixed at 32: a tile holds whole output rows, which the norm needs.
+template <int BM, int BK, int SG>
+kernel void audio_subsample_gemm(device const float* x [[buffer(0)]],
+                                 device const float* w [[buffer(1)]],
+                                 device const float* norm [[buffer(2)]],
+                                 device float* out [[buffer(3)]],
+                                 constant AudioConvParams& p [[buffer(4)]],
+                                 uint tg [[threadgroup_position_in_grid]],
+                                 uint tid [[thread_index_in_threadgroup]],
+                                 uint sgid [[simdgroup_index_in_threadgroup]],
+                                 uint lane [[thread_index_in_simdgroup]]) {
+    constexpr int BN = 32;
+    constexpr int LD = BK + 4;
+    constexpr int THREADS = SG * 32;
+    constexpr int SN = BN / SG;
+    constexpr int TM = BM / 8, TN = SN / 8;
+    constexpr int OUT_LD = BN + 4;
+    constexpr int STAGE = (BM + BN) * LD;
+    static_assert(STAGE >= BM * OUT_LD, "the output tile must fit the staging buffer");
+    threadgroup float stage[STAGE];
+    threadgroup float* Xs = stage;
+    threadgroup float* Ws = stage + BM * LD;
+
+    const uint M = p.outTime * p.outFreq;
+    const uint K = 9 * p.inChannels;
+    const uint m0 = tg * BM;
+
+    simdgroup_float8x8 acc[TM][TN];
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < TM; i++)
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++) acc[i][j] = simdgroup_float8x8(0.0f);
+
+    for (uint k0 = 0; k0 < K; k0 += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint u = tid; u < BM * BK / 4; u += THREADS) {
+            const uint row = u / (BK / 4), c4 = u % (BK / 4);
+            const uint m = m0 + row, k = k0 + c4 * 4;
+            const uint ot = m / p.outFreq, of = m % p.outFreq;
+            const uint tap = k / p.inChannels, ic = k % p.inChannels;
+            const int t = int(2 * ot + tap / 3) - 1, f = int(2 * of + tap % 3) - 1;
+            float4 v = 0.0f;
+            if (m < M && t >= 0 && t < int(p.inTime) && f >= 0 && f < int(p.inFreq)) {
+                const float4 raw = *(device const float4*)(x + ((p.inOffset + uint(t)) * p.inFreq + uint(f)) * p.inChannels + ic);
+                v = float4(half4(raw));
+            }
+            threadgroup float* dst = Xs + row * LD + c4 * 4;
+            dst[0] = v.x; dst[1] = v.y; dst[2] = v.z; dst[3] = v.w;
+        }
+        for (uint u = tid; u < BN * BK / 8; u += THREADS) {
+            const uint row = u / (BK / 8), c8 = u % (BK / 8);
+            const uint k = k0 + c8 * 8;
+            device const float* src = w + (row * p.inChannels + k % p.inChannels) * 9 + k / p.inChannels;
+            threadgroup float* dst = Ws + row * LD + c8 * 8;
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < 8; i++) dst[i] = src[i * 9];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        #pragma clang loop unroll(full)
+        for (int kk = 0; kk < BK; kk += 8) {
+            simdgroup_float8x8 a[TM];
+            simdgroup_float8x8 b[TN];
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < TM; i++)
+                simdgroup_load(a[i], Xs + i * 8 * LD + kk, LD);
+            #pragma clang loop unroll(full)
+            for (int j = 0; j < TN; j++)
+                simdgroup_load(b[j], Ws + (sgid * SN + j * 8) * LD + kk, LD, ulong2(0, 0), true);
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < TM; i++)
+                #pragma clang loop unroll(full)
+                for (int j = 0; j < TN; j++)
+                    simdgroup_multiply_accumulate(acc[i][j], a[i], b[j], acc[i][j]);
+        }
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < TM; i++)
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++)
+            simdgroup_store(acc[i][j], stage + i * 8 * OUT_LD + sgid * SN + j * 8, OUT_LD);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const float nw = norm[lane];
+    for (uint row = sgid; row < BM; row += SG) {
+        const uint m = m0 + row;
+        if (m >= M) break;
+        const float v = stage[row * OUT_LD + lane];
+        const float mean = simd_sum(v) / float(BN);
+        const float d = v - mean;
+        const float variance = simd_sum(d * d) / float(BN);
+        const float scale = 1.0f / precise::sqrt(variance + p.eps);
+        out[(p.outOffset * p.outFreq + m) * BN + lane] = max(0.0f, d * scale * nw);
+    }
+}
+
+#define AUDIO_SUBSAMPLE_GEMM(SUFFIX, BM, BK, SG) \
+    template [[host_name("audio_subsample_gemm_" SUFFIX)]] kernel void audio_subsample_gemm<BM, BK, SG>( \
+        device const float*, device const float*, device const float*, device float*, constant AudioConvParams&, uint, uint, uint, uint);
+
+AUDIO_SUBSAMPLE_GEMM("32x32x32_4", 32, 32, 4)
 
 // x = clamp(x * scale * perDim[i % perDimWidth], lo, hi), the per-dimension factor only when perDimWidth > 0.
 kernel void audio_elementwise(device float* x [[buffer(0)]],

@@ -233,12 +233,17 @@ extension Profiler {
         try time("audio tower", note: "\(layers) layers") { k in
             try tower.encode(batch, workspace: ws, forward: forward, encoder: k.encoder, vectors: vectors, vectorRowOffset: 0)
         }
-        try time("subsample conv 1->128 + conv 128->32", note: "once, per chunk") { k in
+        try time("subsample conv 1->128", note: "once, per chunk") { k in
             let mel = config.info.melBins
             for placement in batch.chunks {
                 try k.audioSubsample(ws.mel, weight: tower.weights.subsampling[0].weight, norm: tower.weights.subsampling[0].norm, out: ws.half,
                                      inTime: placement.frames, inFreq: mel, inChannels: 1, inOffset: placement.frameStart,
                                      outChannels: config.subsamplingChannels[0], outOffset: placement.halfStart, eps: eps)
+            }
+        }
+        try time("subsample conv 128->32 (implicit gemm)", note: "once, per chunk") { k in
+            let mel = config.info.melBins
+            for placement in batch.chunks {
                 try k.audioSubsample(ws.half, weight: tower.weights.subsampling[1].weight, norm: tower.weights.subsampling[1].norm, out: ws.flat,
                                      inTime: placement.halfFrames, inFreq: (mel - 1) / 2 + 1, inChannels: config.subsamplingChannels[0], inOffset: placement.halfStart,
                                      outChannels: config.subsamplingChannels[1], outOffset: placement.tokenStart, eps: eps)

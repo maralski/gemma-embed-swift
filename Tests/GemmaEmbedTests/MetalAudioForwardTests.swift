@@ -100,6 +100,67 @@ final class MetalAudioForwardTests: XCTestCase {
         print("audio embeddings vs llama-server over \(fixtures.count) clips: min cosine \(worst.cosine) (\(worst.file), max abs diff \(worst.diff)); by kind \(byKind)")
     }
 
+    /// Each subsampling layer against the CPU reference on the dumped clips: the first layer on the
+    /// mel input, the second on the CPU's first-layer output (its own arithmetic alone) and on the
+    /// GPU's, where the fp16 rounding of the first layer's output flips a few values by a half ulp.
+    func testSubsamplingLayersMatchCPUReference() throws {
+        let env = try XCTUnwrap(Self.env)
+        let names = TestSupport.audioDumpNames()
+        guard !names.isEmpty else { throw XCTSkip("no audio dumps under \(TestSupport.audioDumpsRoot)") }
+        let audios = try names.map { try env.frontEnd.prepare(try TestSupport.requireAudioDump($0).samples()) }
+        let batch = AudioBatch(audios: audios)
+        let tower = env.audio, config = tower.config, weights = tower.weights
+        let mel = config.info.melBins, halfFreq = (mel - 1) / 2 + 1, eps = config.normEpsilon
+        let ws = try tower.upload(batch, context: env.forward.context)
+        let w0 = env.reference.matrix(weights.subsampling[0].weight), n0 = env.reference.matrix(weights.subsampling[0].norm)
+        let w1 = env.reference.matrix(weights.subsampling[1].weight), n1 = env.reference.matrix(weights.subsampling[1].norm)
+        func run(_ body: (Kernels) throws -> Void) throws {
+            let cb = try XCTUnwrap(env.forward.context.queue.makeCommandBuffer())
+            let enc = try XCTUnwrap(cb.makeComputeCommandEncoder())
+            let k = Kernels(forward: env.forward, encoder: enc, weights: tower.weightBuffer)
+            enc.useResource(tower.weightBuffer, usage: .read)
+            try body(k)
+            enc.endEncoding()
+            cb.commit()
+            cb.waitUntilCompleted()
+            XCTAssertNil(cb.error)
+        }
+        var worst = (layer0: Float(0), layer1: Float(0), layer1Cosine: Float(1))
+        for (audio, placements) in zip(audios, batch.chunkPlacements()) {
+            for (chunk, placement) in zip(audio.chunks, placements) {
+                let (cpu0, halfT, _) = CPUAudioReference.subsample(chunk.values, time: chunk.frames, freq: mel, channels: 1, weight: w0,
+                                                                    outChannels: 128, norm: n0, eps: eps)
+                let (cpu1, _, _) = CPUAudioReference.subsample(cpu0, time: halfT, freq: halfFreq, channels: 128, weight: w1,
+                                                               outChannels: 32, norm: n1, eps: eps)
+                XCTAssertEqual(halfT, placement.halfFrames)
+                func layer0(_ k: Kernels) throws {
+                    try k.audioSubsample(ws.mel, weight: weights.subsampling[0].weight, norm: weights.subsampling[0].norm, out: ws.half,
+                                         inTime: placement.frames, inFreq: mel, inChannels: 1, inOffset: placement.frameStart,
+                                         outChannels: 128, outOffset: placement.halfStart, eps: eps)
+                }
+                func layer1(_ k: Kernels) throws {
+                    try k.audioSubsample(ws.half, weight: weights.subsampling[1].weight, norm: weights.subsampling[1].norm, out: ws.flat,
+                                         inTime: placement.halfFrames, inFreq: halfFreq, inChannels: 128, inOffset: placement.halfStart,
+                                         outChannels: 32, outOffset: placement.tokenStart, eps: eps)
+                }
+                let halfOffset = placement.halfStart * halfFreq * 128 * 4, flatOffset = placement.tokenStart * 1024 * 4
+                try run { k in try layer0(k); try layer1(k) }
+                let gpu0 = ws.half.array(of: Float.self, count: cpu0.count, offset: halfOffset)
+                let gpu1 = ws.flat.array(of: Float.self, count: cpu1.count, offset: flatOffset)
+                worst.layer0 = max(worst.layer0, TestSupport.maxAbsDiff(gpu0, cpu0))
+                worst.layer1Cosine = min(worst.layer1Cosine, TestSupport.cosine(gpu1, cpu1))
+                ws.half.write(cpu0, offset: halfOffset)
+                try run { k in try layer1(k) }
+                worst.layer1 = max(worst.layer1, TestSupport.maxAbsDiff(ws.flat.array(of: Float.self, count: cpu1.count, offset: flatOffset), cpu1))
+            }
+        }
+        print("subsampling vs CPU reference over \(names.count) clips: layer 0 max abs diff \(worst.layer0), layer 1 on the CPU's input \(worst.layer1), layer 1 on the GPU's input min cosine \(worst.layer1Cosine)")
+        // Measured 1.2e-5, 3.2e-5 and 0.99999976 on values of unit scale (LayerNorm output).
+        XCTAssertLessThan(worst.layer0, 1e-4)
+        XCTAssertLessThan(worst.layer1, 2e-4)
+        XCTAssertGreaterThan(worst.layer1Cosine, 0.99999)
+    }
+
     /// A clip embeds to the same bits alone and inside a batch, first or last, beside clips of other lengths.
     func testBatchIndependence() throws {
         let env = try XCTUnwrap(Self.env)
