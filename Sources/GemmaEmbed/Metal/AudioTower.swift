@@ -345,7 +345,7 @@ extension Kernels {
     func audioAttention(q: MTLBuffer, k: MTLBuffer, v: MTLBuffer, relativeKeys: MTLBuffer, layer: Int, chunkStart: MTLBuffer, out: MTLBuffer,
                         tokens: Int, heads: Int, headDim: Int, window: Int, softcap: Float) throws {
         guard tokens > 0 else { return }
-        precondition(window <= 32)
+        precondition(window == 12 && headDim == 128, "audio_attention is compiled for a 12-frame window and 128-wide heads")
         _ = try bindPipeline("audio_attention")
         encoder.setBuffer(q, offset: 0, index: 0)
         encoder.setBuffer(k, offset: 0, index: 1)
@@ -354,6 +354,6 @@ extension Kernels {
         encoder.setBuffer(chunkStart, offset: 0, index: 4)
         encoder.setBuffer(out, offset: 0, index: 5)
         setParams(AudioAttentionParams(tokens: UInt32(tokens), heads: UInt32(heads), headDim: UInt32(headDim), window: UInt32(window), softcap: softcap), index: 6)
-        dispatchThreads(MTLSize(width: tokens, height: heads, depth: 1), perGroup: MTLSize(width: 32, height: heads, depth: 1))
+        dispatchThreads(MTLSize(width: tokens * 32, height: heads, depth: 1), perGroup: MTLSize(width: 256, height: 1, depth: 1))
     }
 }

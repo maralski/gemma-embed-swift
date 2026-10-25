@@ -459,8 +459,14 @@ kernel void audio_dwconv(device const float* x [[buffer(0)]],
     out[i] = s;
 }
 
-// One thread per (token, head). Query t sees keys max(chunkStart, t - window + 1) ... t; a key at
+// Local causal attention with relative keys: query t attends to keys t - 11 ... t of its chunk, and the key at
 // distance d scores q . k + q . rel[d], soft-capped as softcap * tanh(s / softcap).
+// One simdgroup per (query, head): lane l owns dims 4l .. 4l + 3, every score is a simd reduction over the
+// lanes, and the softmax runs redundantly on all 32 lanes. The threadgroup holds 8 consecutive queries of
+// one head, so their overlapping keys share the cache lines.
+#define AUDIO_ATTENTION_WINDOW 12
+#define AUDIO_HEAD_DIM 128
+
 kernel void audio_attention(device const float* q [[buffer(0)]],
                             device const float* k [[buffer(1)]],
                             device const float* v [[buffer(2)]],
@@ -468,39 +474,53 @@ kernel void audio_attention(device const float* q [[buffer(0)]],
                             device const uint* chunkStart [[buffer(4)]],
                             device float* out [[buffer(5)]],
                             constant AudioAttentionParams& p [[buffer(6)]],
-                            uint2 gid [[thread_position_in_grid]]) {
-    const uint t = gid.x, h = gid.y;
+                            uint2 gid [[thread_position_in_grid]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+    const uint t = gid.x / 32, h = gid.y;
     if (t >= p.tokens || h >= p.heads) return;
-    const uint width = p.heads * p.headDim;
-    const uint first = max(chunkStart[t], t + 1 - min(p.window, t + 1));
-    device const float* qt = q + t * width + h * p.headDim;
-    float scores[32];
-    float maxScore = -INFINITY;
-    for (uint j = first; j <= t; j++) {
-        device const float* kj = k + j * width + h * p.headDim;
-        device const float* rj = rel + (t - j) * width + h * p.headDim;
-        float s = 0.0f, r = 0.0f;
-        for (uint i = 0; i < p.headDim; i++) {
-            s += qt[i] * kj[i];
-            r += qt[i] * rj[i];
+    const uint width = p.heads * AUDIO_HEAD_DIM;
+    const uint first = max(chunkStart[t], t + 1 - min(uint(AUDIO_ATTENTION_WINDOW), t + 1));
+    const uint count = t + 1 - first;
+    const uint col = h * AUDIO_HEAD_DIM + lane * 4;
+    const float4 qt = *(device const float4*)(q + t * width + col);
+    // scores[n] is the key at distance n; the loops walk n downwards so the sums run over keys in
+    // increasing order, as the CPU reference does.
+    float scores[AUDIO_ATTENTION_WINDOW];
+#pragma clang loop unroll(full)
+    for (int n = AUDIO_ATTENTION_WINDOW - 1; n >= 0; n--) {
+        float partial = 0.0f;
+        if (uint(n) < count) {
+            const float4 kj = *(device const float4*)(k + (t - n) * width + col);
+            const float4 rn = *(device const float4*)(rel + n * width + col);
+            partial = dot(qt, kj) + dot(qt, rn);
         }
-        const float capped = p.softcap * precise::tanh((s + r) / p.softcap);
-        scores[j - first] = capped;
-        maxScore = max(maxScore, capped);
+        scores[n] = simd_sum(partial);
+    }
+    float maxScore = -INFINITY;
+#pragma clang loop unroll(full)
+    for (int n = AUDIO_ATTENTION_WINDOW - 1; n >= 0; n--) {
+        if (uint(n) < count) {
+            scores[n] = p.softcap * precise::tanh(scores[n] / p.softcap);
+            maxScore = max(maxScore, scores[n]);
+        }
     }
     float sum = 0.0f;
-    for (uint j = first; j <= t; j++) {
-        const float e = exp(scores[j - first] - maxScore);
-        scores[j - first] = e;
-        sum += e;
+#pragma clang loop unroll(full)
+    for (int n = AUDIO_ATTENTION_WINDOW - 1; n >= 0; n--) {
+        if (uint(n) < count) {
+            scores[n] = exp(scores[n] - maxScore);
+            sum += scores[n];
+        }
     }
-    device float* o = out + t * width + h * p.headDim;
-    for (uint i = 0; i < p.headDim; i++) o[i] = 0.0f;
-    for (uint j = first; j <= t; j++) {
-        const float w = scores[j - first] / sum;
-        device const float* vj = v + j * width + h * p.headDim;
-        for (uint i = 0; i < p.headDim; i++) o[i] += w * vj[i];
+    float4 o = float4(0.0f);
+#pragma clang loop unroll(full)
+    for (int n = AUDIO_ATTENTION_WINDOW - 1; n >= 0; n--) {
+        if (uint(n) < count) {
+            const float w = scores[n] / sum;
+            o += w * *(device const float4*)(v + (t - n) * width + col);
+        }
     }
+    *(device float4*)(out + t * width + col) = o;
 }
 
 """#,
