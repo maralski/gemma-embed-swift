@@ -49,21 +49,23 @@ final class AudioPreprocessingTests: XCTestCase {
                 XCTAssertEqual(mel.tokenCount, chunk.tokenCount, name)
                 guard node.file != nil else { continue }
                 let want = try dump.values(chunk.firstNode + 1)
-                // fp32 FFT roundoff shows in the bins near the 0.001 floor (log about -6.9), where a
-                // mel sum is a few parts in a thousand; bins with energy agree to 3e-5.
-                var worstLow: Float = 0, worstHigh: Float = 0
+                // fp32 FFT roundoff shows under the log where a mel sum is small: a bin at the 0.001
+                // floor (log -6.9) moves by parts in a thousand, a bin with energy by 3e-5.
+                var worstHigh: Float = 0, worstMid: Float = 0, worstLow: Float = 0
                 for i in 0..<want.count {
                     let d = abs(mel.values[i] - want[i])
-                    if want[i] > -2 { worstHigh = max(worstHigh, d) } else { worstLow = max(worstLow, d) }
+                    if want[i] > -2 { worstHigh = max(worstHigh, d) } else if want[i] > -6 { worstMid = max(worstMid, d) } else { worstLow = max(worstLow, d) }
                 }
-                XCTAssertFalse(worstLow.isNaN || worstHigh.isNaN, name)
+                XCTAssertFalse(worstLow.isNaN || worstMid.isNaN || worstHigh.isNaN, name)
                 XCTAssertLessThan(worstHigh, 1e-4, "\(name) log-mel vs llama.cpp, bins above -2")
-                XCTAssertLessThan(worstLow, 5e-3, "\(name) log-mel vs llama.cpp, bins near the floor")
+                XCTAssertLessThan(worstMid, 2e-3, "\(name) log-mel vs llama.cpp, bins between -6 and -2")
+                XCTAssertLessThan(worstLow, 5e-3, "\(name) log-mel vs llama.cpp, bins below -6")
+                print("\(name): log-mel max abs diff \(worstHigh) above -2, \(worstMid) between -6 and -2, \(worstLow) below -6")
                 worst = max(worst, worstLow)
                 checked += 1
             }
         }
-        print("log-mel vs llama.cpp over \(checked) chunks of \(names.count) clips: max abs diff \(worst), all of it in bins near the floor")
+        print("log-mel vs llama.cpp over \(checked) chunks of \(names.count) clips: max abs diff \(worst)")
         XCTAssertGreaterThan(checked, 0)
     }
 }

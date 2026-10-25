@@ -15,12 +15,14 @@
 // them, write the fixtures with scripts/make_fixture_audio.py, then from the package root:
 //   M=$PWD/models; A=Tests/GemmaEmbedTests/Fixtures/audio
 //   dump() { mkdir -p "$2" && ./audio_dump $M/embeddinggemma-2-Q8_0.gguf $M/mmproj-embeddinggemma-2-Q8_0.gguf "$1" "$2" ${3:-all} 2> "$2/log.txt"; }
-//   (the list of clips is in scripts/make_fixture_audio.py, under "dumps")
+//   (the list of clips is in scripts/make_fixture_audio.py, under "dumps"); for a clip over 30 s the
+//   second chunk's mel is node first_node + 1 of that chunk, so keep it too: '^(0|1|1388|1389):'.
 #include "llama.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "ggml-backend.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <regex>
 #include <string>
@@ -101,7 +103,9 @@ int main(int argc, char ** argv) {
     dump.index = fopen((outdir + "/nodes.jsonl").c_str(), "w");
 
     mtmd_context_params cp = mtmd_context_params_default();
-    cp.use_gpu = true;
+    // AUDIO_DUMP_CPU=1 runs the graph on ggml's CPU backend instead of Metal, to tell backend
+    // precision apart from a reference bug.
+    cp.use_gpu = getenv("AUDIO_DUMP_CPU") == nullptr;
     cp.print_timings = false;
     cp.n_threads = 8;
     cp.cb_eval = cb_eval;

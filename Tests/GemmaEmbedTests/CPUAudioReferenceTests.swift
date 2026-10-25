@@ -97,9 +97,11 @@ final class CPUAudioReferenceTests: XCTestCase {
                 let want = try dump.outputRows(chunk: c)
                 XCTAssertEqual(rows.count, want.count, "\(name) chunk \(c) output rows")
                 let width = a.config.info.projectionDim
-                // llama.cpp runs its Q8_0 matmuls over long sequences with fp16 activation tiles, so
-                // a few rows of a 750-token chunk drift to cosine 0.999 while the median row stays at
-                // 0.9999996 and the pooled rows at 0.9999998; the text tower pools the rows.
+                // A few rows of a 750-token chunk drift to cosine 0.999 against llama.cpp's Metal
+                // backend while the median row stays at 0.9999996 and the pooled rows at 0.9999998.
+                // llama.cpp's CPU backend, which quantises activations for Q8_0 matmuls, sits at row
+                // cosine 0.86 against this reference and pools to 0.99999, so the spread is the
+                // oracle's activation precision; the text tower pools the rows.
                 var minCosine: Float = 1
                 var pooled = [Float](repeating: 0, count: width), pooledWant = pooled
                 for r in 0..<(want.count / width) {

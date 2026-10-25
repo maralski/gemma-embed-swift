@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """Writes small WAVs covering every bit depth, channel count and sample rate the audio decoder
-must match, encodes one MP3 and one M4A from them with ffmpeg, and dumps miniaudio's decode of
-each through scripts/audio_dump.cpp, so the AudioDecoderTests parity tests have an oracle.
+must match, encodes a FLAC, an MP3 and an M4A from them with ffmpeg and an AIFF and a CAF with
+afconvert, and dumps miniaudio's decode of each through scripts/audio_dump.cpp, so the
+AudioDecoderTests parity tests have an oracle.
 
     python3 scripts/make_decode_checks.py <path/to/audio_dump>
 
 Files go to models/audio/decode-checks/, dumps to models/audio/dumps/decode-<name>/, each with
 samples.f32 (miniaudio's mono 16 kHz float32 output) and meta.json (the audio path, n_samples).
-llama.cpp cannot decode M4A (its is_audio_file accepts only WAV, MP3 and FLAC), so that dump
-holds the source WAV's miniaudio output with "oracle" naming the WAV, and measures how far
-AVFoundation's AAC decode sits from the lossless samples. Deterministic: no random module.
+llama.cpp cannot decode M4A, AIFF or CAF (its is_audio_file accepts only WAV, MP3 and FLAC), so
+those dumps hold the source WAV's miniaudio output with "oracle" naming the WAV: the lossless
+AIFF and CAF must then decode to the same bits, and the M4A measures how far AVFoundation's AAC
+decode sits from them. Paths are recorded resolved, so a worktree's models symlink does not leak
+into meta.json. Deterministic: no random module.
 """
 import json
 import math
@@ -20,12 +23,13 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS = os.path.join(ROOT, "models")
+MODELS = os.path.realpath(os.path.join(ROOT, "models"))
 CHECKS = os.path.join(MODELS, "audio", "decode-checks")
 DUMPS = os.path.join(MODELS, "audio", "dumps")
 TEXT = os.path.join(MODELS, "embeddinggemma-2-Q8_0.gguf")
 MMPROJ = os.path.join(MODELS, "mmproj-embeddinggemma-2-Q8_0.gguf")
 FFMPEG = "/opt/homebrew/bin/ffmpeg"
+AFCONVERT = "/usr/bin/afconvert"
 
 WAVE_FORMAT_PCM = 1
 WAVE_FORMAT_IEEE_FLOAT = 3
@@ -153,26 +157,34 @@ def main():
     print(f"wrote {len(wavs)} WAVs to {CHECKS}")
 
     source = os.path.join(CHECKS, "stereo44100-s16.wav")
-    mp3 = os.path.join(CHECKS, "stereo44100.mp3")
-    m4a = os.path.join(CHECKS, "stereo44100.m4a")
-    for target, codec in ((mp3, ["-codec:a", "libmp3lame", "-b:a", "128k"]), (m4a, ["-codec:a", "aac", "-b:a", "128k"])):
-        result = run([FFMPEG, "-y", "-loglevel", "error", "-i", source] + codec + [target])
+    encoded = {"mp3": ["-codec:a", "libmp3lame", "-b:a", "128k"], "m4a": ["-codec:a", "aac", "-b:a", "128k"], "flac": ["-codec:a", "flac"]}
+    for ext, codec in encoded.items():
+        result = run([FFMPEG, "-y", "-loglevel", "error", "-i", source] + codec + [os.path.join(CHECKS, f"stereo44100.{ext}")])
         if result.returncode != 0:
-            sys.exit(f"ffmpeg failed for {target}:\n{result.stdout}")
+            sys.exit(f"ffmpeg failed for {ext}:\n{result.stdout}")
+    for ext, fmt, data in (("aiff", "AIFF", "BEI16"), ("caf", "caff", "LEI16")):
+        result = run([AFCONVERT, "-f", fmt, "-d", data, source, os.path.join(CHECKS, f"stereo44100.{ext}")])
+        if result.returncode != 0:
+            sys.exit(f"afconvert failed for {ext}:\n{result.stdout}")
 
     for name, path in wavs:
         dump(audio_dump, path, name)
-    dump(audio_dump, mp3, "stereo44100-mp3")
+    for ext in ("mp3", "flac"):
+        dump(audio_dump, os.path.join(CHECKS, f"stereo44100.{ext}"), f"stereo44100-{ext}")
 
-    m4a_dir, ok = dump(audio_dump, m4a, "stereo44100-m4a")
-    if not ok:
-        source_dir = os.path.join(DUMPS, "decode-stereo44100-s16")
-        shutil.copyfile(os.path.join(source_dir, "samples.f32"), os.path.join(m4a_dir, "samples.f32"))
-        with open(os.path.join(source_dir, "meta.json")) as f:
-            meta = json.load(f)
-        with open(os.path.join(m4a_dir, "meta.json"), "w") as f:
-            json.dump({"audio": m4a, "n_samples": meta["n_samples"], "sample_rate": meta["sample_rate"], "oracle": source}, f)
-        print(f"  llama.cpp refuses M4A; {m4a_dir} holds the source WAV's samples with \"oracle\" set", flush=True)
+    # llama.cpp refuses these containers; their dumps carry the source WAV's samples as the oracle.
+    source_dir = os.path.join(DUMPS, "decode-stereo44100-s16")
+    with open(os.path.join(source_dir, "meta.json")) as f:
+        meta = json.load(f)
+    for ext in ("m4a", "aiff", "caf"):
+        path = os.path.join(CHECKS, f"stereo44100.{ext}")
+        outdir, ok = dump(audio_dump, path, f"stereo44100-{ext}")
+        if ok:
+            continue
+        shutil.copyfile(os.path.join(source_dir, "samples.f32"), os.path.join(outdir, "samples.f32"))
+        with open(os.path.join(outdir, "meta.json"), "w") as f:
+            json.dump({"audio": path, "n_samples": meta["n_samples"], "sample_rate": meta["sample_rate"], "oracle": source}, f)
+        print(f"  llama.cpp refuses {ext}; {outdir} holds the source WAV's samples with \"oracle\" set", flush=True)
 
 
 if __name__ == "__main__":

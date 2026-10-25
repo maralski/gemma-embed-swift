@@ -281,12 +281,13 @@ that crosses the chunk boundary. No recordings and no voices are in the reposito
 
 | Check | Result |
 |---|---|
-| WAV decode and miniaudio's downmix and resample, 32 variants (bit depths, 3 to 6 channels, 8 to 96 kHz) | bit-identical to miniaudio's samples |
-| Log-mel front end vs llama.cpp's graph input, 7 clips | bins with energy within 3e-5; bins at the 0.001 floor within 2.4e-3 |
+| WAV decode and miniaudio's downmix and resample, 32 variants (bit depths, 3 to 6 channels, 8 to 96 kHz), plus FLAC, AIFF and CAF of one of them | bit-identical to miniaudio's samples |
+| Log-mel front end vs llama.cpp's graph input, 8 chunks of 7 clips | bins above -2 within 3e-5; bins between -6 and -2 within 1.2e-3; bins at the 0.001 floor within 2.4e-3 |
 | CPU reference audio tower vs llama.cpp per-node sums, 8 chunks, 2448 nodes | within 2.7e-4 of the absolute sum |
 | CPU reference vs llama.cpp, 589 full tensors | cosine 0.999995 or better |
-| Metal audio tower vs CPU reference, 6 clips | row cosine 0.999999 or better |
+| Metal audio tower vs CPU reference, 7 clips including the two-chunk 35 s clip | row cosine 0.999999 or better, max abs diff 3.6e-3 on rows of norm 28 |
 | Metal audio embeddings vs llama-server, all 29 fixture clips | min cosine 0.99998933 (the 35 s clip), max abs diff 7.2e-4 |
+| A generated 5-minute clip (11 chunks, 7504 rows, not in the repository) vs llama-server | cosine 0.9999937 |
 | Same clip alone and inside a batch of 5 mixed lengths, first or last | bit-identical |
 | Text and image parity | unchanged (see Image parity and Parity) |
 
@@ -297,7 +298,7 @@ Run `swift test -c release` to reproduce (see Tests), or
 
 Ten sentences spoken by macOS `say` (`scripts/make_speech_samples.sh`, not in the repository) are
 scored against their ten transcripts and five off-topic texts, all embedded as queries. Every
-clip ranks its own transcript first, by 0.18 or more over the next text, and llama-server's own
+clip ranks its own transcript first, by 0.17 or more over the next text, and llama-server's own
 vectors give the same ranks; GemmaEmbed's similarities agree with llama-server's within 1e-4. Own
 cosines run from 0.80 to 0.90, and the smallest margin is a recipe step whose nearest other text
 is the other cooking sentence. The test skips when the speech folder is absent.

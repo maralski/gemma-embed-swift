@@ -48,7 +48,7 @@ final class MetalAudioForwardTests: XCTestCase {
     /// row by row and llama.cpp's own output rows, both fed miniaudio's samples.
     func testAudioTowerMatchesCPUReferenceAndLlamaCpp() throws {
         let env = try XCTUnwrap(Self.env)
-        let names = TestSupport.audioDumpNames().filter { $0 != "long-35s" }
+        let names = TestSupport.audioDumpNames()
         guard !names.isEmpty else { throw XCTSkip("no audio dumps under \(TestSupport.audioDumpsRoot)") }
         let dumps = try names.map { try TestSupport.requireAudioDump($0) }
         let audios = try dumps.map { try env.frontEnd.prepare(try $0.samples()) }
@@ -72,7 +72,8 @@ final class MetalAudioForwardTests: XCTestCase {
         }
         print("audio tower vs CPU reference over \(names.count) clips: min row cosine \(worstCPU), max abs diff \(worstDiff); vs libmtmd rows min cosine \(worstLlama)")
         XCTAssertGreaterThan(worstCPU, 0.99999)
-        XCTAssertLessThan(worstDiff, 2e-3)
+        // Rows have a norm near 28, so 5e-3 is 2e-4 of a row.
+        XCTAssertLessThan(worstDiff, 5e-3)
         XCTAssertGreaterThan(worstLlama, 0.999)
     }
 

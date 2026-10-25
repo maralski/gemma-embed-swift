@@ -183,8 +183,9 @@ taken as given and converted the same way.
    10 ms either side.
 3. 512-point FFT, magnitudes (`sqrt(re^2 + im^2)`, not powers), 128 triangular HTK mel filters
    from 0 Hz to 8 kHz with no area normalisation, `max(sum, 0.001)`, natural log. The tensor is
-   `[F][128]`. GemmaEmbed's fp32 FFT agrees with llama.cpp's to 3e-5 in bins with energy and to
-   2.4e-3 in bins at the floor, where roundoff relative to the frame's peak is magnified by the log.
+   `[F][128]`. GemmaEmbed's fp32 FFT agrees with llama.cpp's to 3e-5 in bins above -2, to 1.2e-3
+   in bins between -6 and -2, and to 2.4e-3 in bins at the floor (-6.9), where roundoff relative
+   to the frame's peak is magnified by the log.
 4. Token count per chunk: `T = ceil(ceil(F / 2) / 2)` (two convolutions of kernel 3, stride 2,
    padding 1), so 30 s gives 2999 frames and 750 tokens, 25 tokens per second. llama.cpp splits
    at exactly 480000 samples, and a 35 s clip is 750 + 125 tokens.
@@ -259,7 +260,11 @@ sequence would. GemmaEmbed reproduces the split.
 
 Parity (CPU reference and Metal against llama.cpp build 11716): over eight dumped chunks every one of
 the 2448 graph node sums agrees within 2.7e-4 of the node's absolute sum, and 589 full tensors agree
-to cosine 0.999995 or better. llama.cpp's Metal backend runs its Q8_0 matmuls over long sequences
-with fp16 activation tiles, so a few output rows of a 750-token chunk sit at cosine 0.999 while the
-median row is 0.9999996 and the mean-pooled rows are 0.9999998. Over the 29 fixture clips the final
-embeddings agree with llama-server to cosine 0.99998933 or better.
+to cosine 0.999995 or better. A few output rows of a 750-token chunk sit at cosine 0.999 against
+llama.cpp's Metal backend while the median row is 0.9999996 and the mean-pooled rows are
+0.9999998. The spread is llama.cpp's reduced-precision activations, not a reference bug, as far as
+the evidence goes: ggml's Metal matmul stages activations as fp16 for long sequences (inferred from
+its kernels, not measured), and llama.cpp's own CPU backend, whose Q8_0 path quantises the
+activations, lands at row cosine 0.86 against the same reference while its pooled rows still agree
+to 0.99999. Over the 29 fixture clips the final embeddings agree with llama-server to cosine
+0.99998933 or better, and a generated 5-minute clip (11 chunks, 7504 rows) to 0.9999937.

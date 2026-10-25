@@ -16,6 +16,11 @@ From the package root, with the dump() helper from audio_dump.cpp's header:
     dump $A/signals/09-short-chirp.wav models/audio/dumps/short-chirp
     dump $A/signals/10-tone-noise.wav models/audio/dumps/tone-noise '^(0|1|2|3):'
     dump $A/signals/11-mixture.wav models/audio/dumps/mixture '^(0|1|2|3):'
+    dump $A/long/01-35s.wav models/audio/dumps/long-35s '^(0|1|1388|1389):'
+    dump $A/formats/03-rate-48000.wav models/audio/dumps/rate-48000 '^(0|1):'
+    dump $A/formats/04-stereo.wav models/audio/dumps/stereo '^(0|1):'
+The last three keep only the mel input and the output rows (the 35 s clip's second chunk starts at
+node 1388); every dump also holds miniaudio's decoded samples, which the decoder tests read.
 """
 import json
 import math

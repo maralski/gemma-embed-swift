@@ -260,10 +260,15 @@ final class AudioDecoderTests: XCTestCase {
         return dumps
     }
 
-    /// WAV decodes are bit-identical to miniaudio's for every bit depth, channel count and rate.
-    func testWAVDecodeMatchesMiniaudio() throws {
-        let dumps = try Self.decodeDumps().filter { $0.audioURL.pathExtension.lowercased() == "wav" }
-        if dumps.isEmpty { throw XCTSkip("no WAV dumps") }
+    static let losslessExtensions: Set<String> = ["wav", "flac", "aiff", "aif", "caf"]
+
+    /// WAV decodes are bit-identical to miniaudio's for every bit depth, channel count and rate;
+    /// FLAC (decoded by llama.cpp too), AIFF and CAF (measured against their source WAV) carry the
+    /// same 16-bit samples and must decode to the same bits.
+    func testLosslessDecodeMatchesMiniaudio() throws {
+        let dumps = try Self.decodeDumps().filter { Self.losslessExtensions.contains($0.audioURL.pathExtension.lowercased()) }
+        if dumps.isEmpty { throw XCTSkip("no lossless dumps") }
+        XCTAssertGreaterThanOrEqual(dumps.filter { $0.audioURL.pathExtension == "wav" }.count, 1)
         for dump in dumps {
             let got = try AudioDecoder.decode(.url(dump.audioURL))
             XCTAssertEqual(got.count, dump.samples.count, "\(dump.name): length")
@@ -280,7 +285,7 @@ final class AudioDecoderTests: XCTestCase {
     /// was encoded from, which also carries the AAC codec's own loss and delay. `.data` must give
     /// the same samples as `.url`, since AudioToolbox has no file extension to go by there.
     func testCompressedDecodeIsCloseToMiniaudio() throws {
-        let dumps = try Self.decodeDumps().filter { $0.audioURL.pathExtension.lowercased() != "wav" }
+        let dumps = try Self.decodeDumps().filter { !Self.losslessExtensions.contains($0.audioURL.pathExtension.lowercased()) }
         if dumps.isEmpty { throw XCTSkip("no MP3 or M4A dumps") }
         for dump in dumps {
             let got = try AudioDecoder.decode(.url(dump.audioURL))
