@@ -1,0 +1,292 @@
+[
+  {
+    "file": "tones/00-sine-440.wav",
+    "kind": "tone",
+    "note": "440 Hz sine, 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "tones/01-sine-1k.wav",
+    "kind": "tone",
+    "note": "1 kHz sine, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "tones/02-sine-110.wav",
+    "kind": "tone",
+    "note": "low 110 Hz sine, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "tones/03-chord.wav",
+    "kind": "tone",
+    "note": "C major chord (262, 330, 392 Hz), 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "tones/04-burst.wav",
+    "kind": "tone",
+    "note": "0.4 s bursts of 660 and 990 Hz with 0.4 s silences between, 2 s",
+    "seconds": 2.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/00-chirp-up.wav",
+    "kind": "signal",
+    "note": "linear chirp 200 to 6000 Hz, 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/01-chirp-down.wav",
+    "kind": "signal",
+    "note": "exponential chirp 6000 down to 200 Hz, 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/02-white-noise.wav",
+    "kind": "signal",
+    "note": "uniform white noise at 0.5, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/03-lowpass-noise.wav",
+    "kind": "signal",
+    "note": "white noise through a one-pole low-pass (alpha 0.05), 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/04-click-train.wav",
+    "kind": "signal",
+    "note": "10 clicks per second, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/05-am-tone.wav",
+    "kind": "signal",
+    "note": "1 kHz tone amplitude-modulated at 4 Hz, depth 0.8, 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/06-fm-tone.wav",
+    "kind": "signal",
+    "note": "800 Hz tone frequency-modulated at 5 Hz, 200 Hz deviation, 1.5 s",
+    "seconds": 1.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/07-silence.wav",
+    "kind": "signal",
+    "note": "digital silence, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "signals/08-short-tone.wav",
+    "kind": "signal",
+    "note": "523 Hz sine, 0.3 s",
+    "seconds": 0.3,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": true
+  },
+  {
+    "file": "signals/09-short-chirp.wav",
+    "kind": "signal",
+    "note": "linear chirp 300 to 4000 Hz, 1 s",
+    "seconds": 1.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": true
+  },
+  {
+    "file": "signals/10-tone-noise.wav",
+    "kind": "signal",
+    "note": "523 Hz sine at 0.5 plus white noise at 0.15, 2.3 s",
+    "seconds": 2.3,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": true
+  },
+  {
+    "file": "signals/11-mixture.wav",
+    "kind": "signal",
+    "note": "content changing every 1.4 s: tone, chirp, noise, chord, AM tone, 7 s",
+    "seconds": 7.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": true
+  },
+  {
+    "file": "formats/00-rate-8000.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal at 8000 Hz, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 8000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/01-rate-22050.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal at 22050 Hz, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 22050,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/02-rate-44100.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal at 44100 Hz, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 44100,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/03-rate-48000.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal at 48000 Hz, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 48000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/04-stereo.wav",
+    "kind": "format",
+    "note": "stereo: the chirp-plus-tone signal left, a falling chirp plus 660 Hz right, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 2,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/05-quad.wav",
+    "kind": "format",
+    "note": "4 channels: chirp-plus-tone, falling chirp plus 660 Hz, 1 kHz sine, noise, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 4,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "formats/06-pcm8.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal as 8-bit unsigned PCM, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm8",
+    "dump": false
+  },
+  {
+    "file": "formats/07-pcm24.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal as 24-bit PCM, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm24",
+    "dump": false
+  },
+  {
+    "file": "formats/08-pcm32.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal as 32-bit integer PCM, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm32",
+    "dump": false
+  },
+  {
+    "file": "formats/09-float32.wav",
+    "kind": "format",
+    "note": "the chirp-plus-tone signal as 32-bit IEEE float, 0.5 s",
+    "seconds": 0.5,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "float32",
+    "dump": false
+  },
+  {
+    "file": "long/00-30s.wav",
+    "kind": "long",
+    "note": "slowly drifting tones, exactly 480000 samples: one full 30 s chunk",
+    "seconds": 30.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  },
+  {
+    "file": "long/01-35s.wav",
+    "kind": "long",
+    "note": "slowly drifting tones, 35 s: a full chunk and a 5 s chunk",
+    "seconds": 35.0,
+    "sample_rate": 16000,
+    "channels": 1,
+    "format": "pcm16",
+    "dump": false
+  }
+]
