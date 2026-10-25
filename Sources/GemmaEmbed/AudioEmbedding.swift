@@ -64,7 +64,7 @@ extension EmbeddingModel {
         let frontEnd = AudioFrontEnd(melBins: audioConfig.info.melBins)
         try await EmbeddingModel.forEachBatch(count: inputs.count, batchSize: options.batchSize, budgets: [AudioEmbedOptions.frameBudget],
                                               cost: { [$0.frameCount] }, prepare: { range in
-            try await prepare(range.map { ("audio \($0)", inputs[$0]) }, with: frontEnd, maxRows: maxRows)
+            try await self.prepare(range.map { ("audio \($0)", inputs[$0]) }, with: frontEnd, maxRows: maxRows)
         }, body)
     }
 

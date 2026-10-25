@@ -214,24 +214,44 @@ public final class EmbeddingModel: @unchecked Sendable {
 
     /// Prepares `count` items a chunk at a time and hands them to `body` in order, in the batches
     /// `batches` cuts. Preparation runs a chunk ahead, so a batch is cut only once the item after
-    /// it is known and the batches are the ones `batches` plans over every item.
-    static func forEachBatch<Item>(count: Int, batchSize: Int?, budgets: [Int], cost: (Item) -> [Int],
-                                   prepare: (Range<Int>) async throws -> [Item],
-                                   _ body: ([Item]) async throws -> Void) async throws {
+    /// it is known and the batches are the ones `batches` plans over every item. One further chunk
+    /// is prepared in the background while `body` runs, and taken only when the plan needs it, so
+    /// decoding overlaps the GPU; `batches` cuts greedily from the front, so an item prepared early
+    /// never moves a batch boundary.
+    static func forEachBatch<Item: Sendable>(count: Int, batchSize: Int?, budgets: [Int], cost: (Item) -> [Int],
+                                             prepare: @escaping @Sendable (Range<Int>) async throws -> [Item],
+                                             _ body: ([Item]) async throws -> Void) async throws {
         let chunk = max(batchSize ?? 1, ProcessInfo.processInfo.activeProcessorCount)
         var pending: [Item] = []
         var next = 0
-        while next < count || !pending.isEmpty {
+        var ahead: Task<[Item], Error>?
+        defer { ahead?.cancel() }
+        func nextRange() -> Range<Int> {
+            let range = next..<min(count, next + chunk)
+            next = range.upperBound
+            return range
+        }
+        while next < count || ahead != nil || !pending.isEmpty {
             try Task.checkCancellation()
             var plan = batches(pending.map(cost), batchSize: batchSize, budgets: budgets)
-            while next < count && plan.count < 2 {
-                let range = next..<min(count, next + chunk)
-                pending += try await prepare(range)
-                next = range.upperBound
+            while plan.count < 2 {
+                if let task = ahead {
+                    ahead = nil
+                    pending += try await task.value
+                } else if next < count {
+                    pending += try await prepare(nextRange())
+                } else {
+                    break
+                }
                 plan = batches(pending.map(cost), batchSize: batchSize, budgets: budgets)
             }
-            try await body(Array(pending[plan[0]]))
+            if ahead == nil && next < count {
+                let range = nextRange()
+                ahead = Task { try await prepare(range) }
+            }
+            let batch = Array(pending[plan[0]])
             pending.removeFirst(plan[0].count)
+            try await body(batch)
         }
     }
 

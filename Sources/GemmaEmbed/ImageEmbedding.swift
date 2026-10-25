@@ -64,7 +64,7 @@ extension EmbeddingModel {
         let preprocessor = ImagePreprocessor(config: visionConfig)
         try await EmbeddingModel.forEachBatch(count: inputs.count, batchSize: options.batchSize, budgets: [ImageEmbedOptions.patchBudget],
                                               cost: { [$0.patchCount] }, prepare: { range in
-            try await prepare(range.map { ("image \($0)", inputs[$0]) }, with: preprocessor, maxImageTokens: options.maxImageTokens)
+            try await self.prepare(range.map { ("image \($0)", inputs[$0]) }, with: preprocessor, maxImageTokens: options.maxImageTokens)
         }, body)
     }
 

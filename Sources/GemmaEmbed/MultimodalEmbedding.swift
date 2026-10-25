@@ -22,14 +22,14 @@ public struct MultimodalInput: Sendable {
 }
 
 /// An image's or a clip's rows inside a mixed input: how many, and the tokens that frame them.
-struct EncoderSpan {
+struct EncoderSpan: Sendable {
     let rows: Int
     let markers: SpanMarkers
 }
 
 /// The text-tower sequence of one `MultimodalInput`, as llama.cpp's mtmd lays it out:
 /// `[bos] tok(prefix + text) [<|image>] v... [<image|>] tok(text) [<|audio>] a... [<audio|>] ... [eos]`.
-struct MultimodalSequence {
+struct MultimodalSequence: Sendable {
     /// Token ids, and `-(r + 1)` for row `r` of the input's encoder rows, counted across its spans in order.
     let ids: [Int32]
     let truncated: Bool
@@ -127,7 +127,7 @@ extension EmbeddingModel {
         let imageMarkers = try SpanMarkers.image(tokenizer: tokenizer)
         let audioMarkers = try SpanMarkers.audio(tokenizer: tokenizer)
 
-        struct Item {
+        struct Item: Sendable {
             let sequence: MultimodalSequence
             let images: [PreparedImage]
             let audios: [PreparedAudio]
@@ -142,9 +142,9 @@ extension EmbeddingModel {
                                               cost: { [$0.sequence.ids.count, $0.images.reduce(0) { $0 + $1.patchCount }, $0.audios.reduce(0) { $0 + $1.frameCount }] },
                                               prepare: { range -> [Item] in
             let namedImages = range.flatMap { i in imageParts[i].map { ("input \(i), part \($0.part)", $0.image) } }
-            let images = namedImages.isEmpty ? [] : try await prepare(namedImages, with: preprocessor!, maxImageTokens: options.maxImageTokens)
+            let images = namedImages.isEmpty ? [] : try await self.prepare(namedImages, with: preprocessor!, maxImageTokens: options.maxImageTokens)
             let namedAudios = range.flatMap { i in audioParts[i].map { ("input \(i), part \($0.part)", $0.audio) } }
-            let audios = namedAudios.isEmpty ? [] : try await prepare(namedAudios, with: frontEnd!, maxRows: options.maxTokens)
+            let audios = namedAudios.isEmpty ? [] : try await self.prepare(namedAudios, with: frontEnd!, maxRows: options.maxTokens)
             var nextImage = 0, nextAudio = 0
             return try range.map { i in
                 let ownImages = Array(images[nextImage..<(nextImage + imageParts[i].count)])
@@ -161,7 +161,7 @@ extension EmbeddingModel {
                     }
                 }
                 guard let sequence = MultimodalSequence(prefix: options.task.prefix, parts: inputs[i].parts, spans: spans, maxTokens: options.maxTokens,
-                                                        bos: tokenizer.bosId, eos: tokenizer.eosId, encode: { tokenizer.encode($0, addSpecialTokens: false) }) else {
+                                                        bos: self.tokenizer.bosId, eos: self.tokenizer.eosId, encode: { self.tokenizer.encode($0, addSpecialTokens: false) }) else {
                     throw GemmaEmbedError.invalidOptions("input \(i): its images and clips alone need more than maxTokens (\(options.maxTokens)) rows")
                 }
                 return Item(sequence: sequence, images: ownImages, audios: ownAudios, spanIsImage: spanIsImage)
