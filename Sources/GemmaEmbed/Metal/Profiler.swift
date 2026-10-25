@@ -193,3 +193,95 @@ extension Profiler {
         return samples
     }
 }
+
+extension Profiler {
+    /// Times each audio tower kernel class over a real batch of clips, plus the whole audio
+    /// forward and the audio tower alone.
+    public static func profileAudio(model: EmbeddingModel, urls: [URL], reps: Int = 5) throws -> [Sample] {
+        let forward = model.forward
+        guard let tower = forward.audio, let config = model.audioConfig else { throw GemmaEmbedError.audioEncoderNotLoaded }
+        let frontEnd = AudioFrontEnd(melBins: config.info.melBins)
+        let audios = try urls.map { try frontEnd.prepare(try AudioDecoder.decode(.url($0))) }
+        let batch = AudioBatch(audios: audios)
+        let T = batch.tokenCount
+        let rows = MetalForward.paddedRows(T)
+        let d = config.info.hiddenSize, ff = config.info.feedForwardSize
+        let heads = config.info.headCount, hd = config.headDim, eps = config.normEpsilon
+        let layers = tower.weights.layers.count
+        let w = tower.weights.layers[0]
+        var samples: [Sample] = []
+
+        var whole: [Double] = []
+        for _ in 0..<(reps + 1) { whole.append(try forward.timeForward(audio: audios)) }
+        let ws = try tower.upload(batch, context: forward.context)
+        let vectors = try forward.workspace(forRows: MetalForward.paddedRows(T + 4 * audios.count)).vectors
+
+        func time(_ name: String, note: String, _ body: (Kernels) throws -> Void) throws {
+            guard let cb = forward.context.queue.makeCommandBuffer(), let enc = cb.makeComputeCommandEncoder() else { return }
+            enc.useResource(tower.weightBuffer, usage: .read)
+            let k = Kernels(forward: forward, encoder: enc, weights: tower.weightBuffer)
+            for _ in 0..<reps { try body(k) }
+            enc.endEncoding()
+            cb.commit()
+            cb.waitUntilCompleted()
+            samples.append(Sample(name: name, seconds: (cb.gpuEndTime - cb.gpuStartTime) / Double(reps), note: note))
+        }
+
+        let seconds = Double(batch.frameCount) * Double(AudioFrontEnd.hop) / Double(AudioFrontEnd.sampleRate)
+        samples.append(Sample(name: "audio forward (gpu)", seconds: whole.dropFirst().min()!,
+                              note: "\(audios.count) clips, \(String(format: "%.1f", seconds)) s, \(batch.frameCount) frames, \(T) tokens"))
+        try time("audio tower", note: "\(layers) layers") { k in
+            try tower.encode(batch, workspace: ws, forward: forward, encoder: k.encoder, vectors: vectors, vectorRowOffset: 0)
+        }
+        try time("subsample conv 1->128 + conv 128->32", note: "once, per chunk") { k in
+            let mel = config.info.melBins
+            for placement in batch.chunks {
+                try k.audioSubsample(ws.mel, weight: tower.weights.subsampling[0].weight, norm: tower.weights.subsampling[0].norm, out: ws.half,
+                                     inTime: placement.frames, inFreq: mel, inChannels: 1, inOffset: placement.frameStart,
+                                     outChannels: config.subsamplingChannels[0], outOffset: placement.halfStart, eps: eps)
+                try k.audioSubsample(ws.half, weight: tower.weights.subsampling[1].weight, norm: tower.weights.subsampling[1].norm, out: ws.flat,
+                                     inTime: placement.halfFrames, inFreq: (mel - 1) / 2 + 1, inChannels: config.subsamplingChannels[0], inOffset: placement.halfStart,
+                                     outChannels: config.subsamplingChannels[1], outOffset: placement.tokenStart, eps: eps)
+            }
+        }
+        try time("gemm \(d)->\(d) f32 (input projection)", note: "once") { k in
+            try k.gemm(ws.flat, weight: tower.weights.inputProjection.weight, out: ws.x, rows: rows, outputs: d, inputs: d)
+        }
+        try time("gemm \(d)->\(d) (o, pw2)", note: "x2 per layer") { k in
+            try k.gemm(ws.attn, weight: w.wo.weight, out: ws.tmp, rows: rows, outputs: d, inputs: d)
+        }
+        try time("gemm \(d)->3x\(d) (q, k, v in one)", note: "x1 per layer") { k in
+            try k.gemm3(ws.h, weights: (w.wq.weight, w.wk.weight, w.wv.weight), outs: (ws.q, ws.k, ws.v), rows: rows, outputs: d, inputs: d)
+        }
+        try time("gemm \(d)->\(ff) (ffn up)", note: "x2 per layer") { k in
+            try k.gemm(ws.h, weight: w.ffnUp.weight, out: ws.up, rows: rows, outputs: ff, inputs: d)
+        }
+        try time("gemm \(ff)->\(d) (ffn down)", note: "x2 per layer") { k in
+            try k.gemm(ws.up, weight: w.ffnDown.weight, out: ws.tmp, rows: rows, outputs: d, inputs: ff)
+        }
+        try time("gemm \(d)->\(2 * d) (conv pw1)", note: "x1 per layer") { k in
+            try k.gemm(ws.h, weight: w.convPointwise1.weight, out: ws.wide, rows: rows, outputs: 2 * d, inputs: d)
+        }
+        try time("clamp \(d)", note: "x14 per layer", { k in try k.audioElementwise(ws.h, rows: T, width: d, lo: -1, hi: 1) })
+        try time("clamp \(ff)", note: "x4 per layer", { k in try k.audioElementwise(ws.up, rows: T, width: ff, lo: -1, hi: 1) })
+        try time("silu \(ff)", note: "x2 per layer", { k in try k.audioSiLU(ws.up, rows: T, width: ff) })
+        try time("rmsnorm \(d)", note: "x7 per layer", { k in try k.rmsNorm(ws.x, out: ws.h, weight: w.ffnNorm, rows: T, width: d, eps: eps) })
+        try time("add \(d)", note: "x3 per layer", { k in try k.audioAdd(ws.x, ws.tmp2, rows: T, width: d, scale: 0.5) })
+        try time("rmsnorm residual \(d)", note: "x1 per layer", { k in try k.rmsNormResidual(ws.x, add: ws.tmp, weight: w.attnPostNorm, rows: T, width: d, eps: eps) })
+        try time("attention window 12, \(heads)x\(hd)", note: "x1 per layer") { k in
+            try k.audioAttention(q: ws.q, k: ws.k, v: ws.v, relativeKeys: tower.relativeKeys, layer: 0, chunkStart: ws.chunkStart, out: ws.attn,
+                                 tokens: T, heads: heads, headDim: hd, window: config.attentionWindow, softcap: config.softcap)
+        }
+        try time("glu \(2 * d)->\(d)", note: "x1 per layer", { k in try k.audioGLU(ws.wide, out: ws.tmp, rows: T, width: d) })
+        try time("depthwise conv k5", note: "x1 per layer") { k in
+            try k.audioDepthwise(ws.tmp, taps: w.convDepthwise, chunkStart: ws.chunkStart, out: ws.tmp2, rows: T, width: d, kernel: config.depthwiseKernel)
+        }
+        try time("output projections \(d)->\(config.outputWidth)->\(config.info.projectionDim)", note: "once") { k in
+            try k.gemm(ws.x, weight: tower.weights.outputProjection.weight, out: ws.out, rows: rows, outputs: config.outputWidth, inputs: d)
+            try k.audioAddBias(ws.out, bias: tower.weights.outputProjection.bias!, rows: T, width: config.outputWidth)
+            try k.rmsNorm(ws.out, out: ws.out, weight: nil, rows: T, width: config.outputWidth, eps: eps)
+            try k.gemm(ws.out, weight: tower.weights.projection.weight, out: vectors, rows: rows, outputs: config.info.projectionDim, inputs: config.outputWidth)
+        }
+        return samples
+    }
+}

@@ -4,7 +4,9 @@ import GemmaEmbed
 let usage = """
 usage: gemma-embed [options] [FILE]
        gemma-embed --images [options] FILE... | DIR
-  Embeds one text per line from FILE or stdin, or the given images, and prints one JSON object per line.
+       gemma-embed --audio [options] FILE... | DIR
+  Embeds one text per line from FILE or stdin, or the given images or sound files, and prints one JSON
+  object per line.
 
 options:
   --model PATH          GGUF weight file (default: $GEMMA_EMBED_WEIGHTS)
@@ -34,6 +36,20 @@ image options:
                         exit 1 below cosine 0.9995
   --bench-images DIR    time embedding every image in DIR, decoding included, and the GPU part alone;
                         prints images per second for each batch size
+
+audio options:
+  --audio-encoder PATH  audio encoder GGUF, the same mmproj file (default: $GEMMA_EMBED_AUDIO_WEIGHTS,
+                        else the image encoder path)
+  --audio               embed the sound files given, or every sound file in a directory given (wav, mp3,
+                        m4a, aac, aiff, aif, caf, flac, sorted by name); honours --dimensions and, when
+                        given, --max-tokens (default: the model's 8192 rows, about 5 minutes 27 seconds)
+  --batch-size N|auto   clips per GPU batch, or auto for by mel frames (default: by mel frames;
+                        --bench-audio: by mel frames, 8 and 1)
+  --parity-audio DIR    check the clips of manifest.json against embeddings.jsonl in DIR;
+                        exit 1 below cosine 0.9995
+  --bench-audio DIR     time embedding every clip in DIR, decoding included, and the GPU part alone;
+                        prints audio seconds per wall second for each batch size
+  --profile-audio DIR   time each audio tower kernel class over the first --batch-size clips of DIR (default 1)
 """
 
 struct Arguments {
@@ -41,6 +57,7 @@ struct Arguments {
     var task = "document"
     var dimensions = 768
     var maxTokens = 2048
+    var maxTokensGiven = false
     var batchTokens = 8192
     var autotune = false
     var bench: String?
@@ -62,6 +79,11 @@ struct Arguments {
     }
     var parityImages: String?
     var benchImages: String?
+    var audioEncoder: String? = ProcessInfo.processInfo.environment["GEMMA_EMBED_AUDIO_WEIGHTS"]
+    var audio = false
+    var parityAudio: String?
+    var benchAudio: String?
+    var profileAudio: String?
 
     init(_ args: [String]) throws {
         var i = 0
@@ -75,7 +97,7 @@ struct Arguments {
             case "--model": model = try value()
             case "--task": task = try value()
             case "--dimensions": dimensions = Int(try value()) ?? 0
-            case "--max-tokens": maxTokens = Int(try value()) ?? 0
+            case "--max-tokens": maxTokens = Int(try value()) ?? 0; maxTokensGiven = true
             case "--batch-tokens": batchTokens = Int(try value()) ?? 0
             case "--autotune": autotune = true
             case "--bench": bench = try value()
@@ -93,6 +115,11 @@ struct Arguments {
                 batch = v == "auto" ? .auto : .fixed(Int(v) ?? 0)
             case "--parity-images": parityImages = try value()
             case "--bench-images": benchImages = try value()
+            case "--audio-encoder": audioEncoder = try value()
+            case "--audio": audio = true
+            case "--parity-audio": parityAudio = try value()
+            case "--bench-audio": benchAudio = try value()
+            case "--profile-audio": profileAudio = try value()
             case "-h", "--help": print(usage); exit(0)
             default:
                 if args[i].hasPrefix("-") { throw CLIError("unknown option \(args[i])") }
@@ -103,9 +130,14 @@ struct Arguments {
     }
 
     var imageMode: Bool { images || parityImages != nil || benchImages != nil || profileImages != nil }
+    var audioMode: Bool { audio || parityAudio != nil || benchAudio != nil || profileAudio != nil }
 
     var imageOptions: ImageEmbedOptions {
         ImageEmbedOptions(dimensions: dimensions, maxImageTokens: maxImageTokens, batchSize: batchSize)
+    }
+
+    var audioOptions: AudioEmbedOptions {
+        AudioEmbedOptions(dimensions: dimensions, maxTokens: maxTokensGiven ? maxTokens : nil, batchSize: batchSize)
     }
 
     var taskPrefix: TaskPrefix {
@@ -138,17 +170,23 @@ func loadModel(_ a: Arguments) async throws -> EmbeddingModel {
     if a.imageMode && a.imageEncoder == nil {
         throw CLIError("no image encoder: pass --image-encoder or set GEMMA_EMBED_IMAGE_WEIGHTS")
     }
+    let audioPath = a.audioEncoder ?? a.imageEncoder
+    if a.audioMode && audioPath == nil {
+        throw CLIError("no audio encoder: pass --audio-encoder or set GEMMA_EMBED_AUDIO_WEIGHTS (the mmproj file)")
+    }
     let encoder = a.imageMode || a.info ? a.imageEncoder.map { URL(fileURLWithPath: $0) } : nil
+    let audioEncoder = a.audioMode || a.info ? audioPath.map { URL(fileURLWithPath: $0) } : nil
     let t0 = Date()
     let model = try await EmbeddingModel.load(from: URL(fileURLWithPath: path),
-                                              options: LoadOptions(autotune: a.autotune, batchTokenBudget: a.batchTokens, imageEncoder: encoder))
+                                              options: LoadOptions(autotune: a.autotune, batchTokenBudget: a.batchTokens, imageEncoder: encoder,
+                                                                   audioEncoder: audioEncoder))
     let phases = model.loadTimings.sorted { $0.value > $1.value }.map { "\($0.key) \(String(format: "%.2f", $0.value))s" }.joined(separator: ", ")
     FileHandle.standardError.write(Data(String(format: "loaded %@ on %@ in %.2fs (%@)\n", model.info.name, model.device.name, Date().timeIntervalSince(t0), phases).utf8))
     return model
 }
 
 func readLines(_ a: Arguments) throws -> [String] {
-    guard a.files.count <= 1 else { throw CLIError("text mode reads one FILE; pass --images to embed images") }
+    guard a.files.count <= 1 else { throw CLIError("text mode reads one FILE; pass --images or --audio to embed files") }
     let data: Data
     if let f = a.files.first {
         data = try Data(contentsOf: URL(fileURLWithPath: f))
@@ -287,6 +325,104 @@ func runParityImages(_ a: Arguments, model: EmbeddingModel, dir: String) async t
     return tokenMismatches == 0 && minCos > 0.9995
 }
 
+let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aac", "aiff", "aif", "caf", "flac"]
+
+/// The files given, with each directory replaced by its sound files sorted by name.
+func audioFiles(_ paths: [String]) throws -> [URL] {
+    let urls = try paths.flatMap { path -> [URL] in
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { throw CLIError("\(path) does not exist") }
+        guard isDirectory.boolValue else { return [URL(fileURLWithPath: path)] }
+        return try FileManager.default.contentsOfDirectory(atPath: path)
+            .filter { audioExtensions.contains(($0 as NSString).pathExtension.lowercased()) }
+            .sorted()
+            .map { URL(fileURLWithPath: path).appendingPathComponent($0) }
+    }
+    guard !urls.isEmpty else { throw CLIError("no sound files in \(paths.joined(separator: " "))") }
+    return urls
+}
+
+/// Seconds of 16 kHz audio a clip's rows stand for: 40 ms per row after the two stride-2 convolutions.
+func audioSeconds(rows: Int) -> Double { Double(rows - 4) * 0.04 }
+
+func runAudio(_ a: Arguments, model: EmbeddingModel) async throws {
+    let urls = try audioFiles(a.files)
+    let embeddings = try await model.embed(audios: urls.map { .url($0) }, options: a.audioOptions)
+    for (i, (url, e)) in zip(urls, embeddings).enumerated() {
+        print(jsonLine(["index": i, "file": url.path, "tokens": e.tokenCount, "seconds": audioSeconds(rows: e.tokenCount), "embedding": e.vector.map(Double.init)]))
+    }
+}
+
+func runParityAudio(_ a: Arguments, model: EmbeddingModel, dir: String) async throws -> Bool {
+    let base = URL(fileURLWithPath: dir)
+    let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: base.appendingPathComponent("manifest.json"))) as! [[String: Any]]
+    let text = try String(contentsOf: base.appendingPathComponent("embeddings.jsonl"), encoding: .utf8)
+    var references: [String: [String: Any]] = [:]
+    for line in text.split(separator: "\n") {
+        let row = try JSONSerialization.jsonObject(with: Data(line.utf8)) as! [String: Any]
+        references[row["file"] as! String] = row
+    }
+    let files = manifest.map { $0["file"] as! String }.filter {
+        references[$0] != nil && FileManager.default.isReadableFile(atPath: base.appendingPathComponent($0).path)
+    }
+    guard !files.isEmpty else { throw CLIError("no manifest clip of \(dir) is present with a reference embedding") }
+    let embeddings = try await model.embed(audios: files.map { .url(base.appendingPathComponent($0)) }, options: a.audioOptions)
+    var minCos: Float = 1, maxDiff: Float = 0, worst = files[0], tokenMismatches = 0
+    for (file, e) in zip(files, embeddings) {
+        let row = references[file]!
+        let want = (row["embedding"] as! [Double]).map(Float.init)
+        if e.tokenCount != row["prompt_tokens"] as? Int { tokenMismatches += 1 }
+        var dot: Float = 0, diff: Float = 0
+        for j in 0..<want.count { dot += e.vector[j] * want[j]; diff = max(diff, abs(e.vector[j] - want[j])) }
+        if !(dot >= minCos) { minCos = dot; worst = file }
+        maxDiff = max(maxDiff, diff)
+    }
+    print(jsonLine(["clips": files.count, "token_mismatches": tokenMismatches, "min_cosine": Double(minCos),
+                    "max_abs_diff": Double(maxDiff), "worst_file": worst]))
+    return tokenMismatches == 0 && minCos > 0.9995
+}
+
+func runBenchAudio(_ a: Arguments, model: EmbeddingModel, dir: String) async throws {
+    let clips = try audioFiles([dir]).map { AudioInput.url($0) }
+    _ = try await model.embed(audios: Array(clips.prefix(8)), options: AudioEmbedOptions(batchSize: 8))
+    let sizes: [Int?]
+    switch a.batch {
+    case .auto: sizes = [nil]
+    case .fixed(let n): sizes = [n]
+    case nil: sizes = [nil, 8, 1]
+    }
+    for size in sizes {
+        let options = AudioEmbedOptions(dimensions: a.dimensions, maxTokens: a.maxTokensGiven ? a.maxTokens : nil, batchSize: size)
+        var seconds: [Double] = [], gpuSeconds: [Double] = []
+        var rows = 0, audioLength = 0.0
+        for _ in 0..<max(1, a.runs) {
+            let t0 = Date()
+            let out = try await model.embed(audios: clips, options: options)
+            seconds.append(Date().timeIntervalSince(t0))
+            rows = out.reduce(0) { $0 + $1.tokenCount }
+            audioLength = out.reduce(0) { $0 + audioSeconds(rows: $1.tokenCount) }
+        }
+        var batchRuns: [[Double]] = []
+        for _ in 0..<max(1, a.runs) {
+            let batches = try await model.audioForwardBatchSeconds(clips, options: options)
+            batchRuns.append(batches)
+            gpuSeconds.append(batches.reduce(0, +))
+        }
+        let median = seconds.sorted()[seconds.count / 2], best = seconds.min()!
+        let gpuMedian = gpuSeconds.sorted()[gpuSeconds.count / 2]
+        let gpuMinSum = sumOfBatchMinimums(batchRuns)
+        print(jsonLine([
+            "clips": clips.count, "batch_size": size.map { $0 as Any } ?? "auto", "runs": seconds.count, "rows": rows, "audio_seconds": audioLength,
+            "seconds_median": median, "seconds_best": best,
+            "clips_per_second_median": Double(clips.count) / median, "clips_per_second_best": Double(clips.count) / best,
+            "audio_seconds_per_second_median": audioLength / median, "audio_seconds_per_second_best": audioLength / best,
+            "gpu_seconds_median": gpuMedian, "gpu_audio_seconds_per_second_median": audioLength / gpuMedian,
+            "gpu_seconds_minsum": gpuMinSum, "gpu_batches": batchRuns[0].count,
+            "audio_encoder_load_seconds": model.loadTimings["audioEncoder"] ?? 0, "device": model.device.name,
+        ]))
+    }
+}
+
 /// Each batch's fastest run, summed over the batches; GPU work from outside the process slows some
 /// runs of a batch and not others, so this tracks the uncontended time.
 func sumOfBatchMinimums(_ runs: [[Double]]) -> Double {
@@ -353,6 +489,10 @@ Task.detached {
                                 ["layers": e.layerCount, "hidden": e.hiddenSize, "patch_size": e.patchSize,
                                  "projection_dim": e.projectionDim, "file_bytes": e.fileSize,
                                  "default_max_image_tokens": ImageEmbedOptions.defaultMaxImageTokens]
+                            } ?? NSNull(),
+                            "audio_encoder": i.audioEncoder.map { e -> Any in
+                                ["layers": e.layerCount, "hidden": e.hiddenSize, "heads": e.headCount, "mel_bins": e.melBins,
+                                 "projection_dim": e.projectionDim, "file_bytes": e.fileSize, "sample_rate": 16000, "chunk_seconds": 30]
                             } ?? NSNull()]))
         } else if arguments.tuneReport {
             let result = try Autotune.measure(model: model)
@@ -368,6 +508,11 @@ Task.detached {
             for s in try Profiler.profileImages(model: model, urls: urls, maxImageTokens: arguments.maxImageTokens) {
                 print(String(format: "%-40@ %9.3f ms  %@", s.name, s.seconds * 1000, s.note))
             }
+        } else if let dir = arguments.profileAudio {
+            let urls = Array(try audioFiles([dir]).prefix(arguments.batchSize ?? 1))
+            for s in try Profiler.profileAudio(model: model, urls: urls) {
+                print(String(format: "%-40@ %9.3f ms  %@", s.name, s.seconds * 1000, s.note))
+            }
         } else if let path = arguments.bench {
             try await runBench(arguments, model: model, path: path)
         } else if let dir = arguments.parity {
@@ -376,6 +521,12 @@ Task.detached {
             code = try await runParityImages(arguments, model: model, dir: dir) ? 0 : 1
         } else if let dir = arguments.benchImages {
             try await runBenchImages(arguments, model: model, dir: dir)
+        } else if let dir = arguments.parityAudio {
+            code = try await runParityAudio(arguments, model: model, dir: dir) ? 0 : 1
+        } else if let dir = arguments.benchAudio {
+            try await runBenchAudio(arguments, model: model, dir: dir)
+        } else if arguments.audio {
+            try await runAudio(arguments, model: model)
         } else if arguments.images {
             try await runImages(arguments, model: model)
         } else {
