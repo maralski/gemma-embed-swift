@@ -69,7 +69,7 @@ public final class EmbeddingModel: @unchecked Sendable {
         lap("prefault")
         var vision: VisionTower?
         if let image {
-            vision = try VisionTower(context: context, config: image.config, weights: image.weights, markers: ImageMarkers(tokenizer: tokenizer))
+            vision = try VisionTower(context: context, config: image.config, weights: image.weights, markers: SpanMarkers.image(tokenizer: tokenizer))
             lap("imageEncoder")
         }
         let forward = try MetalForward(context: context, config: config, weights: weights, schedule: options.schedule ?? .default, vision: vision)

@@ -24,10 +24,15 @@ struct PackedBatch {
         return (vectorRowCount..<(vectorRowCount + count)).map { -Int32($0) - 1 }
     }
 
-    /// Appends `[bos, <|image>, v..., <image|>, eos]`, where the `vectorRows` v rows are the next
+    /// Appends `[bos, begin, v..., end, eos]`, where the `vectorRows` v rows are the next
     /// unreferenced rows of the vectors buffer.
-    mutating func appendImageSequence(markers: ImageMarkers, vectorRows: Int) {
+    mutating func appendSpanSequence(markers: SpanMarkers, vectorRows: Int) {
         append([markers.bos, markers.begin] + reserveVectorRows(vectorRows) + [markers.end, markers.eos])
+    }
+
+    /// Leaves rows below `row` unreferenced, so a second tower can start its rows on a padded boundary.
+    mutating func skipVectorRows(to row: Int) {
+        vectorRowCount = max(vectorRowCount, row)
     }
 
     func attentionWork(queriesPerGroup: Int) -> [AttentionWork] {
@@ -61,6 +66,8 @@ final class MetalForward: @unchecked Sendable {
     var dispatchType: MTLDispatchType = .concurrent
     /// The image encoder, when one was loaded with the model.
     let vision: VisionTower?
+    /// The audio encoder, when one was loaded with the model.
+    let audio: AudioTower?
     private let ropeTables: [Int: (table: RopeTable, buffer: MTLBuffer)]
     private var workspace: Workspace?
 
@@ -69,15 +76,19 @@ final class MetalForward: @unchecked Sendable {
     static let slackRows = (KernelSchedule.attentionQueryCandidates + [KernelSchedule.visionAttentionQueries]).max()!
 
     init(context: MetalContext, config: ModelConfig, weights: ModelWeights, schedule: KernelSchedule = .default,
-         vision: VisionTower? = nil) throws {
+         vision: VisionTower? = nil, audio: AudioTower? = nil) throws {
         if let vision, vision.config.info.projectionDim != config.info.hiddenSize {
             throw GemmaEmbedError.invalidGGUF("image encoder projects to \(vision.config.info.projectionDim) dimensions, the text model is \(config.info.hiddenSize) wide")
+        }
+        if let audio, audio.config.info.projectionDim != config.info.hiddenSize {
+            throw GemmaEmbedError.invalidGGUF("audio encoder projects to \(audio.config.info.projectionDim) dimensions, the text model is \(config.info.hiddenSize) wide")
         }
         self.context = context
         self.config = config
         self.weights = weights
         self.schedule = schedule
         self.vision = vision
+        self.audio = audio
         let mapping = weights.file.mapping
         guard let wb = context.device.makeBuffer(bytesNoCopy: UnsafeMutableRawPointer(mutating: mapping.base),
                                                  length: mapping.mappedLength, options: .storageModeShared, deallocator: nil) else {
@@ -114,6 +125,9 @@ final class MetalForward: @unchecked Sendable {
         let sequences: MTLBuffer
         let work: MTLBuffer
         let pooled: MTLBuffer
+        /// Rows the encoders hand the text tower: image rows from 0, audio rows from the next
+        /// padded row boundary, each tower writing whole padded GEMM tiles.
+        let vectors: MTLBuffer
 
         init(context: MetalContext, config: ModelConfig, capacity: Int) throws {
             self.capacity = capacity
@@ -141,6 +155,7 @@ final class MetalForward: @unchecked Sendable {
             sequences = try context.makeBuffer(bytes: max(capacity, 1) * MemoryLayout<SequenceRange>.stride, label: "sequences")
             work = try context.makeBuffer(bytes: max(capacity, 1) * MemoryLayout<AttentionWork>.stride, label: "attentionWork")
             pooled = try floats(max(capacity, 1) * config.info.outputDimensions, "pooled")
+            vectors = try floats((capacity + 2 * MetalForward.rowAlignment) * d, "vectors")
         }
     }
 
@@ -161,16 +176,16 @@ final class MetalForward: @unchecked Sendable {
 
     /// Pooled, unnormalised output vectors, one per sequence in the batch. The batch's vector rows
     /// refer to the vision tower's output over `images`, in order, run in the same command buffer.
-    func run(_ batch: PackedBatch, images: VisionBatch? = nil) throws -> [[Float]] {
+    func run(_ batch: PackedBatch, images: VisionBatch? = nil, audio: AudioBatch? = nil) throws -> [[Float]] {
         let count = batch.sequences.count
         guard count > 0 else { return [] }
-        let pass = try execute(batch, images: images, trace: "run")
+        let pass = try execute(batch, images: images, audio: audio, trace: "run")
         return pass.workspace.pooled.rows(count, width: config.info.outputDimensions)
     }
 
     /// GPU time of one forward over the batch, in seconds, with no readback.
-    func timeForward(_ batch: PackedBatch) throws -> Double {
-        try execute(batch, images: nil, trace: nil).gpuSeconds
+    func timeForward(_ batch: PackedBatch, images: VisionBatch? = nil, audio: AudioBatch? = nil) throws -> Double {
+        try execute(batch, images: images, audio: audio, trace: nil).gpuSeconds
     }
 
     /// Pooled, unnormalised output vectors, one per image: the vision tower over every image,
@@ -179,33 +194,69 @@ final class MetalForward: @unchecked Sendable {
     func run(images: [PreparedImage]) throws -> [[Float]] {
         guard !images.isEmpty else { return [] }
         let (vision, text) = try imageBatches(images)
-        let pass = try execute(text, images: vision, trace: "run images")
+        let pass = try execute(text, images: vision, audio: nil, trace: "run images")
         return pass.workspace.pooled.rows(images.count, width: config.info.outputDimensions)
     }
 
     /// GPU time of one image forward over `images`, vision and text towers, in seconds, with no readback.
     func timeForward(images: [PreparedImage]) throws -> Double {
         let (vision, text) = try imageBatches(images)
-        return try execute(text, images: vision, trace: nil).gpuSeconds
+        return try execute(text, images: vision, audio: nil, trace: nil).gpuSeconds
     }
 
     /// The vision tower's output for each image, `tokenCount` rows of the text width, flattened.
     func imageVectors(_ images: [PreparedImage]) throws -> [[Float]] {
         guard !images.isEmpty else { return [] }
         let (vision, text) = try imageBatches(images)
-        let pass = try execute(text, images: vision, trace: nil)
+        let pass = try execute(text, images: vision, audio: nil, trace: nil)
         let width = config.info.hiddenSize
-        let all = pass.vision!.vectors.array(of: Float.self, count: vision.tokenCount * width)
+        let all = pass.workspace.vectors.array(of: Float.self, count: vision.tokenCount * width)
         return zip(images, vision.grids).map { image, grid in
             let start = Int(grid.tokenStart) * width
             return Array(all[start..<(start + image.tokenCount * width)])
         }
     }
 
+    /// Pooled, unnormalised output vectors, one per sound: the audio tower over every chunk, then
+    /// the text tower over each sound's `[bos, <|audio>, rows..., <audio|>, eos]`, in one command buffer.
+    func run(audio audios: [PreparedAudio]) throws -> [[Float]] {
+        guard !audios.isEmpty else { return [] }
+        let (batch, text) = try audioBatches(audios)
+        let pass = try execute(text, images: nil, audio: batch, trace: "run audio")
+        return pass.workspace.pooled.rows(audios.count, width: config.info.outputDimensions)
+    }
+
+    /// GPU time of one audio forward over `audios`, audio and text towers, in seconds, with no readback.
+    func timeForward(audio audios: [PreparedAudio]) throws -> Double {
+        let (batch, text) = try audioBatches(audios)
+        return try execute(text, images: nil, audio: batch, trace: nil).gpuSeconds
+    }
+
+    /// The audio tower's output for each sound, `tokenCount` rows of the text width, flattened.
+    func audioVectors(_ audios: [PreparedAudio]) throws -> [[Float]] {
+        guard !audios.isEmpty else { return [] }
+        let (batch, text) = try audioBatches(audios)
+        let pass = try execute(text, images: nil, audio: batch, trace: nil)
+        let width = config.info.hiddenSize
+        let all = pass.workspace.vectors.array(of: Float.self, count: batch.tokenCount * width)
+        return batch.tokenRanges.map { Array(all[($0.lowerBound * width)..<($0.upperBound * width)]) }
+    }
+
+    private func audioBatches(_ audios: [PreparedAudio]) throws -> (AudioBatch, PackedBatch) {
+        guard let audio else { throw GemmaEmbedError.audioEncoderNotLoaded }
+        let batch = AudioBatch(audios: audios)
+        var text = PackedBatch()
+        for a in audios {
+            precondition(a.tokenCount + 4 <= config.info.maxTokens, "audio of \(a.tokenCount) tokens exceeds the text context")
+            text.appendSpanSequence(markers: audio.markers, vectorRows: a.tokenCount)
+        }
+        return (batch, text)
+    }
+
     /// The q, k and v that layer `layer`'s attention reads in a forward over `batch`, after their
     /// norms and rope, copied out of the workspace. The forward stops after that attention.
     func attentionInputs(_ batch: PackedBatch, layer: Int) throws -> (q: MTLBuffer, k: MTLBuffer, v: MTLBuffer) {
-        let ws = try execute(batch, images: nil, trace: nil, stopAfterAttention: layer).workspace
+        let ws = try execute(batch, images: nil, audio: nil, trace: nil, stopAfterAttention: layer).workspace
         func copy(_ b: MTLBuffer) throws -> MTLBuffer {
             try context.makeBuffer(copying: UnsafeRawBufferPointer(start: b.contents(), count: b.length), label: "\(b.label ?? "") layer \(layer)")
         }
@@ -218,29 +269,44 @@ final class MetalForward: @unchecked Sendable {
         var text = PackedBatch()
         for image in images {
             precondition(image.tokenCount + 4 <= config.info.maxTokens, "image of \(image.tokenCount) tokens exceeds the text context")
-            text.appendImageSequence(markers: vision.markers, vectorRows: image.tokenCount)
+            text.appendSpanSequence(markers: vision.markers, vectorRows: image.tokenCount)
         }
         return (batch, text)
     }
 
     private struct Pass {
         let workspace: Workspace
-        let vision: VisionWorkspace?
         let gpuSeconds: Double
     }
 
-    /// Uploads and encodes the vision tower over `images` when given, then the text tower over
-    /// `batch`, whose vector rows refer to the vision tower's output, and waits for the GPU.
-    private func execute(_ batch: PackedBatch, images: VisionBatch?, trace label: String?, stopAfterAttention: Int? = nil) throws -> Pass {
-        precondition(batch.vectorRowCount == (images?.tokenCount ?? 0))
+    /// Where a batch's audio rows start in the vectors buffer: after the image rows, on a padded boundary.
+    static func audioVectorRowOffset(imageRows: Int) -> Int {
+        imageRows == 0 ? 0 : paddedRows(imageRows)
+    }
+
+    /// Uploads and encodes the vision tower over `images` and the audio tower over `audio` when
+    /// given, then the text tower over `batch`, whose vector rows refer to the towers' output
+    /// (image rows first, audio rows from `audioVectorRowOffset`), and waits for the GPU.
+    private func execute(_ batch: PackedBatch, images: VisionBatch?, audio audioBatch: AudioBatch?, trace label: String?,
+                         stopAfterAttention: Int? = nil) throws -> Pass {
+        let imageRows = images?.tokenCount ?? 0
+        let audioRows = audioBatch?.tokenCount ?? 0
+        let audioOffset = MetalForward.audioVectorRowOffset(imageRows: imageRows)
+        precondition(batch.vectorRowCount == (audioRows == 0 ? imageRows : audioOffset + audioRows))
         var visionPass: (tower: VisionTower, batch: VisionBatch, workspace: VisionWorkspace, workItems: Int)?
         if let images {
             guard let vision else { throw GemmaEmbedError.imageEncoderNotLoaded }
             let (vws, items) = try vision.upload(images, context: context)
             visionPass = (vision, images, vws, items)
         }
+        var audioPass: (tower: AudioTower, batch: AudioBatch, workspace: AudioWorkspace)?
+        if let audioBatch {
+            guard let audio else { throw GemmaEmbedError.audioEncoderNotLoaded }
+            audioPass = (audio, audioBatch, try audio.upload(audioBatch, context: context))
+        }
         let padded = MetalForward.paddedRows(batch.tokenCount)
         let ws = try workspace(forRows: padded)
+        precondition(ws.vectors.length >= (audioOffset + MetalForward.paddedRows(audioRows)) * config.info.hiddenSize * 4)
         ws.tokens.write(batch.tokens)
         ws.positions.write(batch.positions)
         ws.sequences.write(batch.sequences)
@@ -254,9 +320,13 @@ final class MetalForward: @unchecked Sendable {
         let tEncode = Date()
         if let v = visionPass {
             enc.useResource(v.tower.weightBuffer, usage: .read)
-            try v.tower.encode(v.batch, workItems: v.workItems, workspace: v.workspace, forward: self, encoder: enc)
+            try v.tower.encode(v.batch, workItems: v.workItems, workspace: v.workspace, forward: self, encoder: enc, vectors: ws.vectors)
         }
-        try encode(batch: batch, workItems: work.count, paddedRows: padded, workspace: ws, vectors: visionPass?.workspace.vectors,
+        if let a = audioPass {
+            enc.useResource(a.tower.weightBuffer, usage: .read)
+            try a.tower.encode(a.batch, workspace: a.workspace, forward: self, encoder: enc, vectors: ws.vectors, vectorRowOffset: audioOffset)
+        }
+        try encode(batch: batch, workItems: work.count, paddedRows: padded, workspace: ws, vectors: (visionPass != nil || audioPass != nil) ? ws.vectors : nil,
                    stopAfterAttention: stopAfterAttention, encoder: enc)
         enc.endEncoding()
         let tCommit = Date()
@@ -266,7 +336,7 @@ final class MetalForward: @unchecked Sendable {
         if let label, ProcessInfo.processInfo.environment["GEMMA_EMBED_TRACE"] != nil {
             print(String(format: "\(label): encode %.1f ms, commit+wait %.1f ms, gpu %.1f ms, scheduled-start lag %.1f ms", tCommit.timeIntervalSince(tEncode) * 1000, Date().timeIntervalSince(tCommit) * 1000, (cb.gpuEndTime - cb.gpuStartTime) * 1000, (cb.gpuStartTime - cb.kernelStartTime) * 1000))
         }
-        return Pass(workspace: ws, vision: visionPass?.workspace, gpuSeconds: cb.gpuEndTime - cb.gpuStartTime)
+        return Pass(workspace: ws, gpuSeconds: cb.gpuEndTime - cb.gpuStartTime)
     }
 
     /// With `stopAfterAttention`, encodes no further than that layer's attention, so the workspace's
@@ -355,6 +425,11 @@ struct Kernels {
         barrier()
     }
 
+    func dispatchThreads(_ threads: MTLSize, perGroup: MTLSize) { dispatch(threads: threads, perGroup: perGroup) }
+    func dispatchGroups(_ groups: MTLSize, perGroup: MTLSize) { dispatch(groups: groups, perGroup: perGroup) }
+    func bindPipeline(_ name: String) throws -> MTLComputePipelineState { try bind(name) }
+    func setParams<T: BitwiseCopyable>(_ value: T, index: Int) { setBytes(value, index: index) }
+
     private func barrier() {
         if encoder.dispatchType == .concurrent && grouping.depth == 0 { encoder.memoryBarrier(scope: .buffers) }
     }
@@ -412,7 +487,7 @@ struct Kernels {
     }
 
     /// `out = x * weight^T`, optionally followed by an elementwise epilogue.
-    func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, rows: Int, outputs: Int, inputs: Int,
+    func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, outRowOffset: Int = 0, rows: Int, outputs: Int, inputs: Int,
               tile: GemmTile? = nil, epilogue: Epilogue = .store) throws {
         let tile = tile ?? forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: inputs)
         precondition(rows % tile.rows == 0 && outputs % tile.columns == 0 && inputs % tile.depth == 0 && weight.columns == inputs)
@@ -435,7 +510,7 @@ struct Kernels {
         _ = try bind("gemm_\(format)_\(epilogueName)\(tile.suffix)")
         encoder.setBuffer(x, offset: 0, index: 0)
         encoder.setBuffer(weights, offset: weight.fileOffset + weightRowOffset * weight.rowBytes, index: 1)
-        encoder.setBuffer(out, offset: 0, index: 2)
+        encoder.setBuffer(out, offset: outRowOffset * outputs * 4, index: 2)
         setBytes(GemmParams(M: UInt32(rows), N: UInt32(outputs), K: UInt32(inputs), weightRowBytes: UInt32(weight.rowBytes)), index: 3)
         encoder.setBuffer(aux, offset: 0, index: 4)
         dispatch(groups: MTLSize(width: outputs / tile.columns, height: rows / tile.rows, depth: 1), perGroup: MTLSize(width: tile.threads, height: 1, depth: 1))

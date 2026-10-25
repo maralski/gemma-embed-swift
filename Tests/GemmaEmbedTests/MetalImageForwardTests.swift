@@ -28,7 +28,7 @@ final class MetalImageForwardTests: XCTestCase {
             let visionConfig = try VisionConfig(gguf: visionFile, fileSHA256: nil)
             let visionWeights = try VisionWeights(gguf: visionFile, config: visionConfig)
             let vision = try VisionTower(context: context, config: visionConfig, weights: visionWeights,
-                                         markers: try ImageMarkers(tokenizer: Tokenizer(gguf: file)))
+                                         markers: try SpanMarkers.image(tokenizer: Tokenizer(gguf: file)))
             let forward = try MetalForward(context: context, config: config, weights: try ModelWeights(gguf: file, config: config), vision: vision)
             Self.env = Env(forward: forward, vision: vision, preprocessor: ImagePreprocessor(config: visionConfig),
                            reference: CPUVisionReference(config: visionConfig, weights: visionWeights))
@@ -193,7 +193,7 @@ final class MetalImageForwardTests: XCTestCase {
         func mixed(_ before: ArraySlice<[Int32]>, _ picture: PreparedImage, _ after: ArraySlice<[Int32]>) -> (PackedBatch, VisionBatch?) {
             var batch = PackedBatch()
             for t in before { batch.append(t) }
-            batch.appendImageSequence(markers: env.vision.markers, vectorRows: picture.tokenCount)
+            batch.appendSpanSequence(markers: env.vision.markers, vectorRows: picture.tokenCount)
             for t in after { batch.append(t) }
             return (batch, VisionBatch(images: [picture]))
         }

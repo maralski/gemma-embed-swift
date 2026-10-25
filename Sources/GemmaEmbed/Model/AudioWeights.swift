@@ -102,12 +102,8 @@ struct AudioWeights: Sendable {
         }
         self.subsampling = subsampling
         inputProjection = try linear("a.input_projection", inputs: config.subsamplingOutputWidth, outputs: d)
-        let outWidth = try info("a.pre_encode.out.weight", nil, types: [.q8_0, .f32, .bf16, .f16]).shape
-        guard outWidth.count == 2, outWidth[0] == d else {
-            throw GemmaEmbedError.invalidGGUF("a.pre_encode.out.weight has shape \(outWidth), expected [\(d), n]")
-        }
-        outputProjection = try linear("a.pre_encode.out", inputs: d, outputs: outWidth[1])
-        projection = try linear("mm.a.input_projection", inputs: outWidth[1], outputs: config.info.projectionDim)
+        outputProjection = try linear("a.pre_encode.out", inputs: d, outputs: config.outputWidth)
+        projection = try linear("mm.a.input_projection", inputs: config.outputWidth, outputs: config.info.projectionDim)
         layers = try (0..<config.info.layerCount).map { i in
             let b = "a.blk.\(i)"
             return AudioLayerWeights(

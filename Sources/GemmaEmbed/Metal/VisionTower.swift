@@ -47,8 +47,6 @@ final class VisionWorkspace {
     let gate: MTLBuffer
     let up: MTLBuffer
     let pooled: MTLBuffer
-    /// The tower's output, `[tokenRows][projectionDim]`: the image rows of the text sequences.
-    let vectors: MTLBuffer
     let patchX: MTLBuffer
     let patchY: MTLBuffer
     let sequences: MTLBuffer
@@ -72,7 +70,6 @@ final class VisionWorkspace {
         gate = try floats(rows * config.feedForwardSize, "vgate")
         up = try floats(rows * config.feedForwardSize, "vup")
         pooled = try floats(tokenRows * d, "vpooled")
-        vectors = try floats(tokenRows * config.info.projectionDim, "vectors")
         patchX = try context.makeBuffer(bytes: rows * 4, label: "patchX")
         patchY = try context.makeBuffer(bytes: rows * 4, label: "patchY")
         // Every image has at least one patch and every work item at least one query row.
@@ -87,13 +84,13 @@ final class VisionWorkspace {
 final class VisionTower: @unchecked Sendable {
     let config: VisionConfig
     let weights: VisionWeights
-    let markers: ImageMarkers
+    let markers: SpanMarkers
     /// One buffer over the whole mapped image encoder file; tensors are offsets into it.
     let weightBuffer: MTLBuffer
     let rope: (table: RopeTable, buffer: MTLBuffer)
     private var workspace: VisionWorkspace?
 
-    init(context: MetalContext, config: VisionConfig, weights: VisionWeights, markers: ImageMarkers) throws {
+    init(context: MetalContext, config: VisionConfig, weights: VisionWeights, markers: SpanMarkers) throws {
         self.config = config
         self.weights = weights
         self.markers = markers
@@ -140,8 +137,9 @@ final class VisionTower: @unchecked Sendable {
         return (ws, work.count)
     }
 
+    /// Encodes the tower over `batch`, writing its `tokenCount` projected rows into `vectors` from row 0.
     func encode(_ batch: VisionBatch, workItems: Int, workspace ws: VisionWorkspace, forward: MetalForward,
-                encoder: MTLComputeCommandEncoder) throws {
+                encoder: MTLComputeCommandEncoder, vectors: MTLBuffer) throws {
         let k = Kernels(forward: forward, encoder: encoder, weights: weightBuffer)
         let d = config.info.hiddenSize
         let ff = config.feedForwardSize
@@ -180,7 +178,7 @@ final class VisionTower: @unchecked Sendable {
         try k.poolPatches(ws.x, grids: ws.grids, images: batch.images.count, maxTokens: batch.maxTokensPerImage, out: ws.pooled,
                           width: d, merge: config.mergeSize)
         try k.rmsNorm(ws.pooled, out: ws.pooled, weight: nil, rows: T, width: d, eps: eps)
-        try k.gemm(ws.pooled, weight: weights.projection, out: ws.vectors, rows: MetalForward.paddedRows(T),
+        try k.gemm(ws.pooled, weight: weights.projection, out: vectors, rows: MetalForward.paddedRows(T),
                    outputs: config.info.projectionDim, inputs: d)
     }
 }

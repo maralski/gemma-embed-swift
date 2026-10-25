@@ -303,3 +303,42 @@ extension TestSupport {
                          sampleCount: meta["n_samples"] as! Int, chunks: chunks, nodes: nodes, tokensBefore: before, tokensAfter: after)
     }
 }
+
+extension TestSupport {
+    struct AudioFixture {
+        let file: String
+        let kind: String
+        let seconds: Double
+        let sampleRate: Int
+        let channels: Int
+        let format: String
+        let url: URL
+    }
+
+    /// Every clip in `Fixtures/audio/manifest.json`.
+    static func audioFixtures() throws -> [AudioFixture] {
+        let data = try Data(contentsOf: fixture("audio/manifest.json"))
+        let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+        return try manifest.map { entry in
+            let file = entry["file"] as! String
+            return AudioFixture(file: file, kind: entry["kind"] as! String, seconds: entry["seconds"] as! Double,
+                                sampleRate: entry["sample_rate"] as! Int, channels: entry["channels"] as! Int,
+                                format: entry["format"] as! String, url: try fixture("audio/" + file))
+        }
+    }
+
+    struct AudioEmbeddingFixture {
+        let file: String
+        let promptTokens: Int
+        let embedding: [Float]
+    }
+
+    /// llama-server embeddings of the audio fixtures, keyed by path relative to `Fixtures/audio`.
+    static func audioEmbeddingFixtures() throws -> [String: AudioEmbeddingFixture] {
+        let rows = try fixtureJSONLines("audio/embeddings.jsonl").map { row in
+            AudioEmbeddingFixture(file: row["file"] as! String, promptTokens: row["prompt_tokens"] as! Int,
+                                  embedding: (row["embedding"] as! [Double]).map(Float.init))
+        }
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.file, $0) })
+    }
+}

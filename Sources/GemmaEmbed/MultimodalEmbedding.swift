@@ -30,7 +30,7 @@ struct MultimodalSequence {
     /// Lays out `parts` with `imageRows[k]` rows for the k-th image. The prefix joins the first
     /// text, or leads on its own before an image. Text is cut from the end until the sequence fits
     /// `maxTokens`; nil when the images and the frame alone do not fit.
-    init?(prefix: String, parts: [MultimodalInput.Part], imageRows: [Int], maxTokens: Int, markers: ImageMarkers,
+    init?(prefix: String, parts: [MultimodalInput.Part], imageRows: [Int], maxTokens: Int, markers: SpanMarkers,
           encode: (String) -> [Int32]) {
         var parts = parts
         if case .text(let first)? = parts.first {
@@ -107,7 +107,7 @@ extension EmbeddingModel {
         } else if imageParts.contains(where: { !$0.isEmpty }) {
             throw GemmaEmbedError.imageEncoderNotLoaded
         }
-        let markers = try ImageMarkers(tokenizer: tokenizer)
+        let markers = try SpanMarkers.image(tokenizer: tokenizer)
 
         var results: [Embedding] = []
         results.reserveCapacity(inputs.count)

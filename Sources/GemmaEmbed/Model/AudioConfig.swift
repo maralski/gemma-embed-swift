@@ -40,6 +40,8 @@ struct AudioConfig: Sendable {
     var keyScale: Float { logf(1 + expf(1)) / logf(2) }
     /// Width of the flattened subsampling output that enters the Conformer: 32 frequency rows of 32 channels.
     var subsamplingOutputWidth: Int { (info.melBins / 4) * subsamplingChannels[1] }
+    /// Width of `a.pre_encode.out`, the projection the multimodal embedder reads.
+    let outputWidth: Int
 
     static let supportedArchitecture = "clip"
     static let supportedProjector = "gemma4a"
@@ -65,6 +67,10 @@ struct AudioConfig: Sendable {
         guard heads > 0, hidden % heads == 0 else { throw GemmaEmbedError.invalidGGUF("audio width \(hidden) does not split into \(heads) heads") }
         let mel = try int("num_mel_bins")
         guard mel % 4 == 0 else { throw GemmaEmbedError.invalidGGUF("\(mel) mel bins do not survive two stride-2 convolutions evenly") }
+        guard let outShape = gguf.tensor(named: "a.pre_encode.out.weight")?.shape, outShape.count == 2, outShape[0] == hidden else {
+            throw GemmaEmbedError.invalidGGUF("a.pre_encode.out.weight is missing or not [\(hidden), n]")
+        }
+        outputWidth = outShape[1]
         info = AudioEncoderInfo(
             layerCount: try int("block_count"),
             hiddenSize: hidden,

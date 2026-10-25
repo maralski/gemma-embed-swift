@@ -127,6 +127,7 @@ extension Profiler {
         var whole: [Double] = []
         for _ in 0..<(reps + 1) { whole.append(try forward.timeForward(images: images)) }
         let (ws, workItems) = try tower.upload(batch, context: forward.context)
+        let vectors = try forward.workspace(forRows: MetalForward.paddedRows(T + 4 * images.count)).vectors
 
         func time(_ name: String, note: String, _ body: (Kernels) throws -> Void) throws {
             guard let cb = forward.context.queue.makeCommandBuffer(), let enc = cb.makeComputeCommandEncoder() else { return }
@@ -142,7 +143,7 @@ extension Profiler {
         samples.append(Sample(name: "image forward (gpu)", seconds: whole.dropFirst().min()!,
                               note: "\(images.count) images, \(P) patches, \(T) tokens"))
         try time("vision tower", note: "\(layers) layers") { k in
-            try tower.encode(batch, workItems: workItems, workspace: ws, forward: forward, encoder: k.encoder)
+            try tower.encode(batch, workItems: workItems, workspace: ws, forward: forward, encoder: k.encoder, vectors: vectors)
         }
         try time("gemm patch embedding", note: "once") { k in
             try k.gemm(ws.patches, weight: tower.weights.patchEmbedding, out: ws.x, rows: patchRows, outputs: d, inputs: config.patchArea)
@@ -186,7 +187,7 @@ extension Profiler {
             try k.poolPatches(ws.x, grids: ws.grids, images: batch.images.count, maxTokens: batch.maxTokensPerImage, out: ws.pooled,
                               width: d, merge: config.mergeSize)
             try k.rmsNorm(ws.pooled, out: ws.pooled, weight: nil, rows: T, width: d, eps: eps)
-            try k.gemm(ws.pooled, weight: tower.weights.projection, out: ws.vectors, rows: MetalForward.paddedRows(T),
+            try k.gemm(ws.pooled, weight: tower.weights.projection, out: vectors, rows: MetalForward.paddedRows(T),
                        outputs: config.info.projectionDim, inputs: d)
         }
         return samples

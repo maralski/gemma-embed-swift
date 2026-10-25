@@ -76,7 +76,7 @@ final class KernelTests: XCTestCase {
         let config = try VisionConfig(gguf: file, fileSHA256: nil)
         let weights = try VisionWeights(gguf: file, config: config)
         let tower = try VisionTower(context: env.context, config: config, weights: weights,
-                                    markers: try ImageMarkers(tokenizer: Tokenizer(gguf: env.weights.file)))
+                                    markers: try SpanMarkers.image(tokenizer: Tokenizer(gguf: env.weights.file)))
         let v = VisionEnv(config: config, weights: weights, tower: tower, reference: CPUVisionReference(config: config, weights: weights))
         Self.visionEnv = v
         return v

@@ -4,7 +4,7 @@ import XCTest
 
 /// The sequence layout of a mixed input, without weights: one id per character stands in for the tokenizer.
 final class MultimodalSequenceTests: XCTestCase {
-    let markers = ImageMarkers(bos: 2, begin: 900, end: 901, eos: 1)
+    let markers = SpanMarkers(bos: 2, begin: 900, end: 901, eos: 1)
     let image = MultimodalInput.Part.image(.data(Data()))
 
     func ids(_ text: String) -> [Int32] { text.unicodeScalars.map { Int32($0.value) } }

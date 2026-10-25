@@ -89,7 +89,7 @@ final class CPUVisionReferenceTests: XCTestCase {
 
     struct Text {
         let reference: CPUReference
-        let markers: ImageMarkers
+        let markers: SpanMarkers
     }
 
     nonisolated(unsafe) static var sharedText: Text?
@@ -99,14 +99,14 @@ final class CPUVisionReferenceTests: XCTestCase {
         let file = try GGUFFile(url: try TestSupport.requireWeights())
         let config = try ModelConfig(gguf: file, deviceName: "cpu", fileSHA256: nil)
         let t = Text(reference: CPUReference(config: config, weights: try ModelWeights(gguf: file, config: config)),
-                     markers: try ImageMarkers(tokenizer: Tokenizer(gguf: file)))
+                     markers: try SpanMarkers.image(tokenizer: Tokenizer(gguf: file)))
         Self.sharedText = t
         return t
     }
 
-    func testImageMarkers() throws {
+    func testSpanMarkers() throws {
         let markers = try text().markers
-        XCTAssertEqual(markers, try ImageMarkers(tokenizer: Tokenizer(gguf: GGUFFile(url: TestSupport.requireWeights()))))
+        XCTAssertEqual(markers, try SpanMarkers.image(tokenizer: Tokenizer(gguf: GGUFFile(url: TestSupport.requireWeights()))))
         XCTAssertEqual([markers.bos, markers.begin, markers.end, markers.eos], [2, 255999, 258882, 1])
         let rows = markers.sequence(vectors: [1, 2, 3, 4, 5, 6], width: 3)
         XCTAssertEqual(rows, [.token(2), .token(255999), .vector([1, 2, 3]), .vector([4, 5, 6]), .token(258882), .token(1)])

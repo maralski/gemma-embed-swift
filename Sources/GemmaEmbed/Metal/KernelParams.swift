@@ -186,3 +186,41 @@ public struct KernelSchedule: Sendable, Hashable, Codable {
         return gemmTile(rows: rows, outputs: outputs)
     }
 }
+
+// Mirrors of the structs in Audio.metal.
+
+struct AudioConvParams {
+    var inTime: UInt32
+    var inFreq: UInt32
+    var inChannels: UInt32
+    var outTime: UInt32
+    var outFreq: UInt32
+    var outChannels: UInt32
+    var inOffset: UInt32
+    var outOffset: UInt32
+    var eps: Float
+}
+
+struct AudioElementwiseParams {
+    var rows: UInt32
+    var width: UInt32
+    var perDimWidth: UInt32
+    var scale: Float
+    var lo: Float
+    var hi: Float
+}
+
+struct AudioRowsParams {
+    var rows: UInt32
+    var width: UInt32
+    var taps: UInt32
+    var scale: Float
+}
+
+struct AudioAttentionParams {
+    var tokens: UInt32
+    var heads: UInt32
+    var headDim: UInt32
+    var window: UInt32
+    var softcap: Float
+}

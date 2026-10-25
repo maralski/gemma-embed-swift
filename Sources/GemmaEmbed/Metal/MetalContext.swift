@@ -16,7 +16,7 @@ final class MetalContext: @unchecked Sendable {
     private var pipelines: [String: MTLComputePipelineState] = [:]
     private let lock = NSLock()
 
-    static let shaderFiles = ["Common.metal", "Elementwise.metal", "GEMM.metal", "Attention.metal"]
+    static let shaderFiles = ["Common.metal", "Elementwise.metal", "GEMM.metal", "Attention.metal", "Audio.metal"]
 
     init(device: MTLDevice? = nil) throws {
         guard let device = device ?? MTLCreateSystemDefaultDevice() else { throw GemmaEmbedError.noMetalDevice }
