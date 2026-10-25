@@ -45,6 +45,10 @@ struct AudioFrontEnd: Sendable {
     let cosTable: [Float]
     /// `[melBins][bins]` triangular HTK filters from 0 Hz to 8 kHz, no area normalisation.
     let filters: [Float]
+    /// Per filter, the bins with nonzero weight, widened to whole groups of four.
+    let filterBands: [Range<Int>]
+    /// Input index for each output slot of the FFT's first level.
+    let bitReversal: [Int]
 
     init(melBins: Int) {
         self.melBins = melBins
@@ -57,6 +61,8 @@ struct AudioFrontEnd: Sendable {
         sinTable = (0..<n).map { sinf(Float((2 * Double.pi * Double($0)) / Double(n))) }
         cosTable = (0..<n).map { cosf(Float((2 * Double.pi * Double($0)) / Double(n))) }
         filters = AudioFrontEnd.melFilterbank(melBins: melBins, fftSize: n, sampleRate: AudioFrontEnd.sampleRate)
+        filterBands = AudioFrontEnd.filterBands(filters, melBins: melBins, bins: AudioFrontEnd.bins)
+        bitReversal = AudioFrontEnd.bitReversal(n)
     }
 
     /// Frames llama.cpp takes from `samples` samples of one chunk (PyTorch's `unfold(320 + 1, 160)`
@@ -128,78 +134,117 @@ struct AudioFrontEnd: Sendable {
         return PreparedAudio(sampleCount: samples.count, chunks: chunks)
     }
 
-    /// The log-mel frames of one chunk.
+    /// The log-mel frames of one chunk. Frames are independent, so blocks of them run in parallel,
+    /// each block on its own FFT buffers.
     func logMel(_ chunk: ArraySlice<Float>) -> MelChunk {
-        let n = AudioFrontEnd.fftSize, hop = AudioFrontEnd.hop, bins = AudioFrontEnd.bins
+        let n = AudioFrontEnd.fftSize, hop = AudioFrontEnd.hop
         let frames = AudioFrontEnd.frameCount(samples: chunk.count)
         precondition(frames >= 1)
         // 160 zeros in front, then zeros behind so the last frame has a full 512 samples.
         let padLeft = AudioFrontEnd.windowLength / 2
         var padded = [Float](repeating: 0, count: (frames - 1) * hop + n)
         padded.replaceSubrange(padLeft..<(padLeft + chunk.count), with: chunk)
+        let window = padded
 
-        var values = [Float](repeating: 0, count: frames * melBins)
-        var input = [Float](repeating: 0, count: n)
-        var spectrum = [Float](repeating: 0, count: 2 * n)
-        var magnitude = [Float](repeating: 0, count: bins)
-        for frame in 0..<frames {
-            let offset = frame * hop
-            for j in 0..<n { input[j] = hann[j] * padded[offset + j] }
-            fft(input, count: n, out: &spectrum)
-            for j in 0..<bins {
-                let re = spectrum[2 * j], im = spectrum[2 * j + 1]
-                magnitude[j] = (re * re + im * im).squareRoot()
+        let block = 64
+        let blocks = (frames + block - 1) / block
+        let rows = Slots<[Float]>(count: blocks)
+        DispatchQueue.concurrentPerform(iterations: blocks) { b in
+            let first = b * block, last = min(frames, first + block)
+            var values = [Float](repeating: 0, count: (last - first) * melBins)
+            var input = [Float](repeating: 0, count: n)
+            var spectrum = [Float](repeating: 0, count: 2 * n)
+            var magnitude = [Float](repeating: 0, count: AudioFrontEnd.bins)
+            for frame in first..<last {
+                let offset = frame * hop
+                for j in 0..<n { input[j] = hann[j] * window[offset + j] }
+                fft(input, out: &spectrum)
+                melRow(spectrum: spectrum, magnitude: &magnitude, into: &values, at: (frame - first) * melBins)
             }
-            for m in 0..<melBins {
-                let f = m * bins
-                var sum = 0.0
-                var k = 0
-                // llama.cpp sums four products in float before adding to its double accumulator.
-                while k < bins - 3 {
-                    let partial = magnitude[k] * filters[f + k] + magnitude[k + 1] * filters[f + k + 1]
-                        + magnitude[k + 2] * filters[f + k + 2] + magnitude[k + 3] * filters[f + k + 3]
-                    sum += Double(partial)
-                    k += 4
-                }
-                while k < bins {
-                    sum += Double(magnitude[k] * filters[f + k])
-                    k += 1
-                }
-                values[frame * melBins + m] = Float(log(max(sum, Double(Float(0.001)))))
-            }
+            rows.buffer[b] = values
         }
-        return MelChunk(frames: frames, melBins: melBins, values: values)
+        return MelChunk(frames: frames, melBins: melBins, values: rows.buffer.flatMap { $0! })
     }
 
-    /// Radix-2 Cooley-Tukey FFT of `count` real samples taken every `stride` from `x[base...]`,
-    /// written as interleaved complex pairs at `out[outOffset...]`, with llama.cpp's twiddle table
-    /// and butterfly order. Strided views replace llama.cpp's even/odd copies.
-    private func fft(_ x: [Float], base: Int = 0, count: Int, stride: Int = 1, out: inout [Float], outOffset: Int = 0) {
-        if count == 1 {
-            out[outOffset] = x[base]
-            out[outOffset + 1] = 0
-            return
+    /// One frame's `melBins` log-mel values from its spectrum, with llama.cpp's arithmetic: each
+    /// filter sums four magnitude-weight products in float before adding to a double accumulator.
+    /// Bins outside the filter's band weigh zero and add exactly nothing, so only its band is read.
+    private func melRow(spectrum: [Float], magnitude: inout [Float], into values: inout [Float], at row: Int) {
+        let bins = AudioFrontEnd.bins
+        for j in 0..<bins {
+            let re = spectrum[2 * j], im = spectrum[2 * j + 1]
+            magnitude[j] = (re * re + im * im).squareRoot()
         }
-        let half = count / 2
-        var sub = [Float](repeating: 0, count: 2 * count)
-        fft(x, base: base, count: half, stride: 2 * stride, out: &sub, outOffset: 0)
-        fft(x, base: base + stride, count: half, stride: 2 * stride, out: &sub, outOffset: count)
-        combine(sub, count: count, out: &out, outOffset: outOffset)
+        for m in 0..<melBins {
+            let f = m * bins
+            let band = filterBands[m]
+            var sum = 0.0
+            var k = band.lowerBound
+            while k < min(band.upperBound, bins - 3) {
+                let partial = magnitude[k] * filters[f + k] + magnitude[k + 1] * filters[f + k + 1]
+                    + magnitude[k + 2] * filters[f + k + 2] + magnitude[k + 3] * filters[f + k + 3]
+                sum += Double(partial)
+                k += 4
+            }
+            while k < band.upperBound {
+                sum += Double(magnitude[k] * filters[f + k])
+                k += 1
+            }
+            values[row + m] = Float(log(max(sum, Double(Float(0.001)))))
+        }
     }
 
-    /// `sub` holds the even half's spectrum then the odd half's, each `count` floats.
-    private func combine(_ sub: [Float], count: Int, out: inout [Float], outOffset: Int) {
-        let half = count / 2
-        let step = AudioFrontEnd.fftSize / count
-        for k in 0..<half {
-            let re = cosTable[k * step]
-            let im = -sinTable[k * step]
-            let reOdd = sub[count + 2 * k], imOdd = sub[count + 2 * k + 1]
-            let evenRe = sub[2 * k], evenIm = sub[2 * k + 1]
-            out[outOffset + 2 * k] = evenRe + re * reOdd - im * imOdd
-            out[outOffset + 2 * k + 1] = evenIm + re * imOdd + im * reOdd
-            out[outOffset + 2 * (k + half)] = evenRe - re * reOdd + im * imOdd
-            out[outOffset + 2 * (k + half) + 1] = evenIm - re * imOdd - im * reOdd
+    /// The bins each filter touches, widened to the four-bin groups llama.cpp's sum walks so a
+    /// group is always summed whole, in the same order.
+    static func filterBands(_ filters: [Float], melBins: Int, bins: Int) -> [Range<Int>] {
+        (0..<melBins).map { m in
+            let row = filters[(m * bins)..<((m + 1) * bins)]
+            guard let first = row.firstIndex(where: { $0 != 0 }), let last = row.lastIndex(where: { $0 != 0 }) else { return 0..<0 }
+            let lo = (first - row.startIndex) / 4 * 4
+            let hi = min(bins, (last - row.startIndex) / 4 * 4 + 4)
+            return lo..<hi
+        }
+    }
+
+    /// Radix-2 decimation-in-time FFT of the `fftSize` real samples in `x`, written as interleaved
+    /// complex pairs. The butterflies, their order and llama.cpp's twiddle table are those of its
+    /// recursive even/odd split, so the spectrum is bit for bit the same; the recursion is replaced
+    /// by a bit-reversed copy and an in-place pass per level.
+    private func fft(_ x: [Float], out: inout [Float]) {
+        let n = AudioFrontEnd.fftSize
+        for i in 0..<n {
+            out[2 * bitReversal[i]] = x[i]
+            out[2 * bitReversal[i] + 1] = 0
+        }
+        var count = 2
+        while count <= n {
+            let half = count / 2
+            let step = n / count
+            var base = 0
+            while base < n {
+                for k in 0..<half {
+                    let re = cosTable[k * step]
+                    let im = -sinTable[k * step]
+                    let even = 2 * (base + k), odd = 2 * (base + k + half)
+                    let reOdd = out[odd], imOdd = out[odd + 1]
+                    let evenRe = out[even], evenIm = out[even + 1]
+                    out[even] = evenRe + re * reOdd - im * imOdd
+                    out[even + 1] = evenIm + re * imOdd + im * reOdd
+                    out[odd] = evenRe - re * reOdd + im * imOdd
+                    out[odd + 1] = evenIm - re * imOdd - im * reOdd
+                }
+                base += count
+            }
+            count *= 2
+        }
+    }
+
+    static func bitReversal(_ n: Int) -> [Int] {
+        let levels = n.trailingZeroBitCount
+        return (0..<n).map { i in
+            var r = 0
+            for b in 0..<levels where i & (1 << b) != 0 { r |= 1 << (levels - 1 - b) }
+            return r
         }
     }
 }
