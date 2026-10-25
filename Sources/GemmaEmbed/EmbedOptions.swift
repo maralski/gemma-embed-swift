@@ -85,15 +85,41 @@ public struct ImageEmbedOptions: Sendable {
     public static let patchBudget = 4096
 }
 
+/// Options for one `embed(audios:)` call.
+public struct AudioEmbedOptions: Sendable {
+    /// Output width: 768, 512, 256 or 128, as for text.
+    public var dimensions: Int
+    /// L2-normalise the output so dot products are cosine similarities.
+    public var normalise: Bool
+    /// Longest sequence per clip, counting BOS, EOS, the two frame tokens and one row per 40 ms
+    /// of audio; nil means the model's limit (8192 rows, about 5 minutes 27 seconds). A clip that
+    /// needs more rows is refused with `invalidOptions`, since llama.cpp does not cut audio either.
+    public var maxTokens: Int?
+    /// Clips per GPU batch; `nil` packs clips up to `frameBudget` mel frames per batch, and always
+    /// at least one clip.
+    public var batchSize: Int?
+
+    public init(dimensions: Int = 768, normalise: Bool = true, maxTokens: Int? = nil, batchSize: Int? = nil) {
+        self.dimensions = dimensions
+        self.normalise = normalise
+        self.maxTokens = maxTokens
+        self.batchSize = batchSize
+    }
+
+    /// Mel frames (10 ms each) per GPU batch when `batchSize` is nil: two minutes of audio. The
+    /// first convolution's output takes 32 KB per frame, so a batch holds about 400 MB of it.
+    public static let frameBudget = 12000
+}
+
 /// Options for one `embed(_: MultimodalInput)` call.
 public struct MultimodalEmbedOptions: Sendable {
     /// Prepended to the input's first text, as the model card prescribes for text only; it leads
     /// on its own when the input opens with an image.
     public var task: TaskPrefix
-    /// Longest sequence per input, counting BOS, EOS, the image frame tokens and every image's
-    /// rows. Text is cut from the end (the last text part first) until the input fits; the image
-    /// frames stay whole. An input whose images alone exceed it is refused with `invalidOptions`.
-    /// At most `ModelInfo.maxTokens`.
+    /// Longest sequence per input, counting BOS, EOS, the frame tokens and every image's and
+    /// clip's rows. Text is cut from the end (the last text part first) until the input fits; the
+    /// image and audio frames stay whole. An input whose images and clips alone exceed it is
+    /// refused with `invalidOptions`. At most `ModelInfo.maxTokens`.
     public var maxTokens: Int
     /// Output width: 768, 512, 256 or 128, as for text.
     public var dimensions: Int
@@ -116,11 +142,11 @@ public struct MultimodalEmbedOptions: Sendable {
     }
 }
 
-/// One embedded text or image.
+/// One embedded text, image, clip or mixed input.
 public struct Embedding: Sendable {
     public let vector: [Float]
     /// Rows the text tower saw: tokens including BOS and EOS after any truncation, plus for each
-    /// image its vision tokens and the two that frame them.
+    /// image or clip its encoder rows and the two that frame them.
     public let tokenCount: Int
     /// True when the text exceeded `maxTokens` and was cut.
     public let truncated: Bool
@@ -132,8 +158,8 @@ public struct Embedding: Sendable {
     }
 }
 
-/// Progress of a long `embed` call, reported after every GPU batch. For images and mixed inputs,
-/// texts count inputs and tokens count the rows of `Embedding.tokenCount`.
+/// Progress of a long `embed` call, reported after every GPU batch. For images, clips and mixed
+/// inputs, texts count inputs and tokens count the rows of `Embedding.tokenCount`.
 public struct EmbeddingProgress: Sendable {
     public let completedTexts: Int
     public let totalTexts: Int
@@ -157,15 +183,20 @@ public struct LoadOptions: Sendable {
     /// load option rather than something added to a loaded model, so a model never changes
     /// after `load` and needs no lock.
     public var imageEncoder: URL?
+    /// The audio encoder GGUF, which `embed(audios:)` needs. It is the same mmproj file as the
+    /// image encoder, which holds both towers; pass it to one option, the other or both, and only
+    /// the towers asked for are loaded. The file is mapped once when both name it.
+    public var audioEncoder: URL?
 
     public init(autotune: Bool = false, autotuneCacheDirectory: URL? = nil, schedule: KernelSchedule? = nil,
-                computeFileHash: Bool = false, batchTokenBudget: Int = 8192, imageEncoder: URL? = nil) {
+                computeFileHash: Bool = false, batchTokenBudget: Int = 8192, imageEncoder: URL? = nil, audioEncoder: URL? = nil) {
         self.autotune = autotune
         self.autotuneCacheDirectory = autotuneCacheDirectory
         self.schedule = schedule
         self.computeFileHash = computeFileHash
         self.batchTokenBudget = batchTokenBudget
         self.imageEncoder = imageEncoder
+        self.audioEncoder = audioEncoder
     }
 }
 

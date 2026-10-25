@@ -25,6 +25,8 @@ public struct ModelInfo: Sendable {
     public let fileSize: Int
     /// The image encoder loaded with the model, or nil when `LoadOptions.imageEncoder` was not set.
     public let imageEncoder: ImageEncoderInfo?
+    /// The audio encoder loaded with the model, or nil when `LoadOptions.audioEncoder` was not set.
+    public let audioEncoder: AudioEncoderInfo?
 }
 
 struct LayerConfig: Sendable {
@@ -47,7 +49,8 @@ struct ModelConfig: Sendable {
     static let supportedArchitecture = "gemma-embedding2"
     static let supportedMaxTokens = 8192
 
-    init(gguf: GGUFFile, deviceName: String, fileSHA256: String?, imageEncoder: ImageEncoderInfo? = nil) throws {
+    init(gguf: GGUFFile, deviceName: String, fileSHA256: String?, imageEncoder: ImageEncoderInfo? = nil,
+         audioEncoder: AudioEncoderInfo? = nil) throws {
         let arch = gguf.string("general.architecture") ?? ""
         guard arch == ModelConfig.supportedArchitecture else { throw GemmaEmbedError.unsupportedArchitecture(arch) }
         func int(_ key: String) throws -> Int {
@@ -93,7 +96,8 @@ struct ModelConfig: Sendable {
             fileSHA256: fileSHA256,
             deviceName: deviceName,
             fileSize: gguf.fileSize,
-            imageEncoder: imageEncoder)
+            imageEncoder: imageEncoder,
+            audioEncoder: audioEncoder)
         self.layers = (0..<layerCount).map { i in
             LayerConfig(index: i,
                         isSlidingWindow: pattern[i],

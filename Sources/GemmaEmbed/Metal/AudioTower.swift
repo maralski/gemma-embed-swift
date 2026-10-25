@@ -79,7 +79,9 @@ final class AudioWorkspace {
         tokenCapacity = tokenRows
         let rows = tokenRows + MetalForward.slackRows
         let d = config.info.hiddenSize
-        let halfFrames = (frames - 1) / 2 + 1
+        // Every chunk rounds its frame count up on its own, so the half rows of a batch can exceed
+        // half its frames by one per chunk; a chunk has at least one frame, so frames bounds that too.
+        let halfFrames = frames
         func floats(_ n: Int, _ label: String) throws -> MTLBuffer { try context.makeBuffer(bytes: n * 4, label: label) }
         mel = try floats(frames * config.info.melBins, "amel")
         half = try floats(halfFrames * (config.info.melBins / 2) * config.subsamplingChannels[0], "ahalf")

@@ -99,7 +99,7 @@ extension EmbeddingModel {
 }
 
 /// One value per index, each written by exactly one `concurrentPerform` iteration.
-private final class Slots<T>: @unchecked Sendable {
+final class Slots<T>: @unchecked Sendable {
     let buffer: UnsafeMutableBufferPointer<T?>
 
     init(count: Int) {

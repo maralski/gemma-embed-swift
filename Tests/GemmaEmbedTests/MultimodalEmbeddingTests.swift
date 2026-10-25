@@ -7,9 +7,15 @@ final class MultimodalEmbeddingTests: XCTestCase {
 
     override func setUp() async throws {
         if Self.model == nil {
+            let mmproj = try TestSupport.requireImageEncoder()
             Self.model = try await EmbeddingModel.load(from: try TestSupport.requireWeights(),
-                                                       options: LoadOptions(imageEncoder: try TestSupport.requireImageEncoder()))
+                                                       options: LoadOptions(imageEncoder: mmproj, audioEncoder: mmproj))
         }
+    }
+
+    func clip(_ file: String) throws -> AudioInput {
+        guard let fixture = try TestSupport.audioFixtures().first(where: { $0.file == file }) else { throw XCTSkip("fixture clip \(file) missing") }
+        return .url(fixture.url)
     }
 
     func image(_ file: String) throws -> ImageInput {
@@ -115,6 +121,62 @@ final class MultimodalEmbeddingTests: XCTestCase {
     }
 
     /// Catches text-only inputs requiring the image encoder, and an image silently dropped without it.
+    /// Catches a clip-only input laid out differently from `embed(audios:)`, or audio rows framed
+    /// with the image tokens.
+    func testAudioOnlyInputMatchesAudioEmbedding() async throws {
+        let model = try XCTUnwrap(Self.model)
+        for file in ["signals/10-tone-noise.wav", "long/01-35s.wav"] {
+            let sound = try clip(file)
+            let mixed = try await model.embed(MultimodalInput([.audio(sound)]), options: MultimodalEmbedOptions(task: .none, maxTokens: 1000))
+            let alone = try await model.embed(audio: sound)
+            assertSame(mixed, alone, file)
+        }
+    }
+
+    /// Catches audio rows pointing at image rows or another input's clip when text, images and
+    /// clips share one GPU batch, and a clip's rows not counting toward the token limit.
+    func testTextImageAndAudioTogetherAreBatchIndependent() async throws {
+        let model = try XCTUnwrap(Self.model)
+        let hills = try image("scenes/00-green-hills.jpg"), shapes = try image("synthetic/07-shapes.jpg")
+        let tone = try clip("signals/08-short-tone.wav"), chirp = try clip("signals/09-short-chirp.wav")
+        let input = MultimodalInput([.text("a tone, then a picture"), .audio(tone), .image(hills), .text("and a chirp"), .audio(chirp)])
+        let mixed = try await model.embed(input)
+        let text = try await model.embed("a tone, then a picture and a chirp")
+        let soundAlone = try await model.embed(audio: tone)
+        let picture = try await model.embed(image: hills)
+        let textTokens = model.tokenizer.encode(TaskPrefix.document.prefix + "a tone, then a picture", addSpecialTokens: false).count
+            + model.tokenizer.encode("and a chirp", addSpecialTokens: false).count
+        let chirpRows = try await model.embed(audio: chirp).tokenCount - EmbeddingModel.audioFrameRows
+        XCTAssertEqual(mixed.tokenCount, 2 + textTokens + (soundAlone.tokenCount - 2) + (picture.tokenCount - 2) + chirpRows + 2)
+        XCTAssertLessThan(TestSupport.cosine(mixed.vector, text.vector), 0.999)
+        XCTAssertLessThan(TestSupport.cosine(mixed.vector, soundAlone.vector), 0.999)
+
+        let inputs = [MultimodalInput([.audio(chirp)]),
+                      input,
+                      MultimodalInput([.image(shapes), .text("between"), .audio(tone)]),
+                      MultimodalInput([.text("a short caption")]),
+                      MultimodalInput([.audio(tone), .audio(chirp)])]
+        let batched = try await model.embed(inputs, options: MultimodalEmbedOptions(batchSize: inputs.count))
+        for (i, other) in inputs.enumerated() {
+            let solo = try await model.embed(other)
+            XCTAssertEqual(batched[i].tokenCount, solo.tokenCount, "input \(i)")
+            XCTAssertGreaterThan(TestSupport.cosine(batched[i].vector, solo.vector), 0.9999, "input \(i)")
+        }
+        do {
+            _ = try await model.embed(input, options: MultimodalEmbedOptions(maxTokens: 60))
+            XCTFail("an input whose clips and image alone overflow must be refused")
+        } catch GemmaEmbedError.invalidOptions {}
+    }
+
+    func testWithoutAudioEncoder() async throws {
+        let model = try await EmbeddingModel.load(from: try TestSupport.requireWeights(),
+                                                   options: LoadOptions(imageEncoder: try TestSupport.requireImageEncoder()))
+        do {
+            _ = try await model.embed(MultimodalInput([.text(Self.text), .audio(try clip("signals/08-short-tone.wav"))]))
+            XCTFail("a clip was embedded without the audio encoder")
+        } catch GemmaEmbedError.audioEncoderNotLoaded {}
+    }
+
     func testWithoutImageEncoder() async throws {
         let model = try await EmbeddingModel.load(from: try TestSupport.requireWeights())
         let mixed = try await model.embed(MultimodalInput([.text(Self.text)]))

@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Metal
 
-/// An EmbeddingGemma 2 text encoder, and optionally its image encoder, running on the local GPU.
+/// An EmbeddingGemma 2 text encoder, and optionally its image and audio encoders, running on the local GPU.
 ///
 /// ```swift
 /// let model = try await EmbeddingModel.load(from: weightsURL)
@@ -30,6 +30,7 @@ public final class EmbeddingModel: @unchecked Sendable {
 
     let forward: MetalForward
     let visionConfig: VisionConfig?
+    let audioConfig: AudioConfig?
     let batchTokenBudget: Int
     private let gpuQueue = DispatchQueue(label: "GemmaEmbed.forward", qos: .userInitiated)
 
@@ -54,14 +55,30 @@ public final class EmbeddingModel: @unchecked Sendable {
         let hash = options.computeFileHash ? EmbeddingModel.sha256(of: file) : nil
         lap("hash")
         var image: (config: VisionConfig, weights: VisionWeights)?
+        var audio: (config: AudioConfig, weights: AudioWeights)?
+        var encoderFiles: [URL: GGUFFile] = [:]
+        func encoderFile(_ url: URL) throws -> GGUFFile {
+            if let open = encoderFiles[url.standardizedFileURL] { return open }
+            let opened = try GGUFFile(url: url)
+            encoderFiles[url.standardizedFileURL] = opened
+            return opened
+        }
         if let encoderURL = options.imageEncoder {
-            let encoderFile = try GGUFFile(url: encoderURL)
-            let encoderConfig = try VisionConfig(gguf: encoderFile, fileSHA256: options.computeFileHash ? EmbeddingModel.sha256(of: encoderFile) : nil)
-            image = (encoderConfig, try VisionWeights(gguf: encoderFile, config: encoderConfig))
-            encoderFile.prefault()
+            let file = try encoderFile(encoderURL)
+            let encoderConfig = try VisionConfig(gguf: file, fileSHA256: options.computeFileHash ? EmbeddingModel.sha256(of: file) : nil)
+            image = (encoderConfig, try VisionWeights(gguf: file, config: encoderConfig))
             lap("imageEncoder")
         }
-        let config = try ModelConfig(gguf: file, deviceName: context.device.name, fileSHA256: hash, imageEncoder: image?.config.info)
+        if let encoderURL = options.audioEncoder {
+            let file = try encoderFile(encoderURL)
+            let encoderConfig = try AudioConfig(gguf: file, fileSHA256: image?.config.info.fileSHA256 ?? (options.computeFileHash ? EmbeddingModel.sha256(of: file) : nil))
+            audio = (encoderConfig, try AudioWeights(gguf: file, config: encoderConfig))
+            lap("audioEncoder")
+        }
+        for file in encoderFiles.values { file.prefault() }
+        if image != nil { lap("imageEncoder") } else if audio != nil { lap("audioEncoder") }
+        let config = try ModelConfig(gguf: file, deviceName: context.device.name, fileSHA256: hash, imageEncoder: image?.config.info,
+                                     audioEncoder: audio?.config.info)
         let weights = try ModelWeights(gguf: file, config: config)
         self.tokenizer = try Tokenizer(gguf: file)
         lap("tokenizer")
@@ -72,11 +89,18 @@ public final class EmbeddingModel: @unchecked Sendable {
             vision = try VisionTower(context: context, config: image.config, weights: image.weights, markers: SpanMarkers.image(tokenizer: tokenizer))
             lap("imageEncoder")
         }
-        let forward = try MetalForward(context: context, config: config, weights: weights, schedule: options.schedule ?? .default, vision: vision)
+        var audioTower: AudioTower?
+        if let audio {
+            audioTower = try AudioTower(context: context, config: audio.config, weights: audio.weights, markers: SpanMarkers.audio(tokenizer: tokenizer))
+            lap("audioEncoder")
+        }
+        let forward = try MetalForward(context: context, config: config, weights: weights, schedule: options.schedule ?? .default,
+                                       vision: vision, audio: audioTower)
         try context.warmUpPipelines()
         lap("pipelines")
         self.forward = forward
         self.visionConfig = image?.config
+        self.audioConfig = audio?.config
         self.info = config.info
         self.device = DeviceInfo(name: context.device.name, maxBufferLength: context.device.maxBufferLength,
                                  recommendedMaxWorkingSetSize: Int(context.device.recommendedMaxWorkingSetSize),

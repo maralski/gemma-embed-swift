@@ -5,12 +5,29 @@ import XCTest
 /// The sequence layout of a mixed input, without weights: one id per character stands in for the tokenizer.
 final class MultimodalSequenceTests: XCTestCase {
     let markers = SpanMarkers(bos: 2, begin: 900, end: 901, eos: 1)
+    let audioMarkers = SpanMarkers(bos: 2, begin: 800, end: 801, eos: 1)
     let image = MultimodalInput.Part.image(.data(Data()))
+    let audio = MultimodalInput.Part.audio(.data(Data()))
 
     func ids(_ text: String) -> [Int32] { text.unicodeScalars.map { Int32($0.value) } }
 
+    /// Image spans unless the part at that position is a clip.
     func sequence(_ prefix: String, _ parts: [MultimodalInput.Part], rows: [Int], maxTokens: Int = 100) -> MultimodalSequence? {
-        MultimodalSequence(prefix: prefix, parts: parts, imageRows: rows, maxTokens: maxTokens, markers: markers, encode: ids)
+        var rows = rows.makeIterator()
+        let spans = parts.compactMap { part -> EncoderSpan? in
+            switch part {
+            case .text: return nil
+            case .image: return EncoderSpan(rows: rows.next()!, markers: markers)
+            case .audio: return EncoderSpan(rows: rows.next()!, markers: audioMarkers)
+            }
+        }
+        return MultimodalSequence(prefix: prefix, parts: parts, spans: spans, maxTokens: maxTokens, bos: 2, eos: 1, encode: ids)
+    }
+
+    /// Catches a clip framed with the image tokens, or its rows not continuing the image rows' numbering.
+    func testAudioSpansUseTheirOwnFrameAndShareRowNumbering() throws {
+        let s = try XCTUnwrap(sequence("P:", [.text("a"), image, audio, .text("b")], rows: [2, 3]))
+        XCTAssertEqual(s.ids, [2] + ids("P:a") + [900, -1, -2, 901, 800, -3, -4, -5, 801] + ids("b") + [1])
     }
 
     /// Catches the prefix landing anywhere but in front of the first text, a missing or misplaced
