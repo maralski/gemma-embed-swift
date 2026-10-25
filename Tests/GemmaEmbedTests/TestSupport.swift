@@ -204,3 +204,102 @@ enum TestSupport {
                           imageTokenCount: meta["n_image_tokens"] as! Int, nodes: nodes)
     }
 }
+
+extension TestSupport {
+    static let defaultAudioDumpsPath = modelsDirectory.appendingPathComponent("audio/dumps").path
+
+    /// One clip's audio graph as dumped from llama.cpp's libmtmd through `cb_eval`
+    /// (`scripts/audio_dump.cpp`): miniaudio's samples, the chunk layout, every node and the
+    /// 512-wide output rows of every chunk.
+    struct AudioDump {
+        struct Chunk {
+            let tokenCount: Int
+            /// Node indices of this chunk's graph: `firstNode ..< endNode`.
+            let firstNode: Int
+            let endNode: Int
+        }
+
+        let name: String
+        let directory: URL
+        let audioURL: URL
+        let sampleCount: Int
+        let chunks: [Chunk]
+        let nodes: [VisionDump.Node]
+        /// Text tokens around the audio: `[bos, <|audio>]` before and `[<audio|>, eos]` after.
+        let tokensBefore: [Int32]
+        let tokensAfter: [Int32]
+
+        /// Node `index` of the dump; indices run across chunks.
+        func node(_ index: Int) -> VisionDump.Node? {
+            nodes.first { $0.index == index }
+        }
+
+        func floats(_ file: String) throws -> [Float] {
+            let data = try Data(contentsOf: directory.appendingPathComponent(file))
+            return data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        }
+
+        /// The saved values of node `index`, in ggml layout (fastest dimension first).
+        func values(_ index: Int) throws -> [Float] {
+            let node = try XCTUnwrap(node(index), "dump \(name) has no node \(index)")
+            let file = try XCTUnwrap(node.file, "dump \(name) did not save node \(index)")
+            let values = try floats(file)
+            XCTAssertEqual(values.count, node.shape.reduce(1, *), "\(name) node \(index)")
+            return values
+        }
+
+        /// miniaudio's decode of the clip: mono float32 at 16 kHz.
+        func samples() throws -> [Float] {
+            let s = try floats("samples.f32")
+            XCTAssertEqual(s.count, sampleCount)
+            return s
+        }
+
+        /// The audio tower's output for chunk `c`: `tokenCount` rows of 512.
+        func outputRows(chunk c: Int) throws -> [Float] {
+            try floats("output_embd-\(c).f32")
+        }
+    }
+
+    static var audioDumpsRoot: String {
+        ProcessInfo.processInfo.environment["GEMMA_EMBED_AUDIO_DUMPS"] ?? defaultAudioDumpsPath
+    }
+
+    /// The dumps present under the audio dumps directory, by name, excluding the decode-only ones.
+    static func audioDumpNames() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: audioDumpsRoot)) ?? []
+        return names.filter { !$0.hasPrefix("decode-") && FileManager.default.fileExists(atPath: "\(audioDumpsRoot)/\($0)/nodes.jsonl") }.sorted()
+    }
+
+    static func requireAudioDump(_ name: String) throws -> AudioDump {
+        let directory = URL(fileURLWithPath: audioDumpsRoot).appendingPathComponent(name)
+        let metaURL = directory.appendingPathComponent("meta.json")
+        guard FileManager.default.isReadableFile(atPath: metaURL.path) else {
+            throw XCTSkip("audio dump \(name) not found; set GEMMA_EMBED_AUDIO_DUMPS to the dumps directory")
+        }
+        let meta = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: metaURL)) as? [String: Any])
+        var nodes: [VisionDump.Node] = []
+        if let text = try? String(contentsOf: directory.appendingPathComponent("nodes.jsonl"), encoding: .utf8) {
+            for line in text.split(separator: "\n") {
+                let row = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+                guard let index = row["i"] as? Int, let sum = row["sum"] as? Double else { continue }
+                let file = row["file"] as? String
+                nodes.append(VisionDump.Node(index: index, name: row["name"] as! String, op: row["op"] as! String,
+                                             shape: row["ne"] as! [Int], sum: sum, absSum: row["abs_sum"] as? Double ?? 0,
+                                             file: file?.isEmpty == false ? file : nil))
+            }
+        }
+        var chunks: [AudioDump.Chunk] = []
+        var before: [Int32] = [], after: [Int32] = []
+        for entry in meta["chunks"] as! [[String: Any]] {
+            if entry["type"] as? String == "audio" {
+                chunks.append(AudioDump.Chunk(tokenCount: entry["n_tokens"] as! Int, firstNode: entry["first_node"] as! Int, endNode: entry["end_node"] as! Int))
+            } else {
+                let tokens = (entry["tokens"] as! [Int]).map(Int32.init)
+                if chunks.isEmpty { before += tokens } else { after += tokens }
+            }
+        }
+        return AudioDump(name: name, directory: directory, audioURL: URL(fileURLWithPath: meta["audio"] as! String),
+                         sampleCount: meta["n_samples"] as! Int, chunks: chunks, nodes: nodes, tokensBefore: before, tokensAfter: after)
+    }
+}
