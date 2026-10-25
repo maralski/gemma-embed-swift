@@ -51,8 +51,19 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * ud) {
         d->n++;
         return true;
     }
+    // A view's bytes span its strides, so they are fetched whole and the elements gathered;
+    // reading ggml_nbytes into an nelements buffer overruns it on a strided view.
+    std::vector<char> raw(ggml_nbytes(t));
+    ggml_backend_tensor_get(t, raw.data(), 0, raw.size());
     std::vector<float> data(ggml_nelements(t));
-    ggml_backend_tensor_get(t, data.data(), 0, ggml_nbytes(t));
+    {
+        size_t n = 0;
+        for (int64_t i3 = 0; i3 < t->ne[3]; i3++)
+            for (int64_t i2 = 0; i2 < t->ne[2]; i2++)
+                for (int64_t i1 = 0; i1 < t->ne[1]; i1++)
+                    for (int64_t i0 = 0; i0 < t->ne[0]; i0++)
+                        data[n++] = *(const float *) (raw.data() + i3 * t->nb[3] + i2 * t->nb[2] + i1 * t->nb[1] + i0 * t->nb[0]);
+    }
     double sum = 0, asum = 0;
     for (float v : data) { sum += v; asum += v < 0 ? -v : v; }
     std::string key = std::to_string(d->n) + ":" + ggml_op_name(t->op);
