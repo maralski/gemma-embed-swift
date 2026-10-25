@@ -1,0 +1,13 @@
+GemmaEmbed
+Copyright 2026 Peter Marelas
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE),
+the same license Google releases EmbeddingGemma 2 and the Gemma 4 models under.
+
+GemmaEmbed does not include any model weights. The EmbeddingGemma 2 GGUF files
+it loads are distributed by Google and ggml-org under their own Apache 2.0
+license, and Google asks that deployments follow the Gemma Prohibited Use
+Policy: https://ai.google.dev/gemma/prohibited_use_policy
+
+Gemma is a trademark of Google LLC. This project is not affiliated with or
+endorsed by Google.

@@ -1,0 +1,212 @@
+// Y[M,N] = X[M,K] * W[N,K]^T with fp32 activations and quantized or bf16 weights.
+//
+// Every loop over the fragment arrays is fully unrolled so they are indexed with constants and
+// stay in registers; a rolled loop puts them in memory.
+
+struct FmtQ8 {
+    // Stages 8 consecutive weights of one row starting at column k (k % 8 == 0).
+    static inline void load8(device const uchar* w, uint rowBytes, uint row, uint k, thread float* out) {
+        device const uchar* b = w + row * rowBytes + (k / 32) * Q8_BLOCK_BYTES;
+        const float scale = f16_to_float(ushort(b[0]) | (ushort(b[1]) << 8));
+        device const ushort* q = (device const ushort*)(b + 2 + (k % 32));
+        for (uint i = 0; i < 4; i++) {
+            const ushort v = q[i];
+            out[2 * i] = scale * float(as_type<char>(uchar(v & 0xFF)));
+            out[2 * i + 1] = scale * float(as_type<char>(uchar(v >> 8)));
+        }
+    }
+};
+
+struct FmtBF16 {
+    static inline void load8(device const uchar* w, uint rowBytes, uint row, uint k, thread float* out) {
+        const uint4 v = *(device const uint4*)(w + row * rowBytes + k * 2);
+        out[0] = bf16_to_float(ushort(v.x & 0xFFFF)); out[1] = bf16_to_float(ushort(v.x >> 16));
+        out[2] = bf16_to_float(ushort(v.y & 0xFFFF)); out[3] = bf16_to_float(ushort(v.y >> 16));
+        out[4] = bf16_to_float(ushort(v.z & 0xFFFF)); out[5] = bf16_to_float(ushort(v.z >> 16));
+        out[6] = bf16_to_float(ushort(v.w & 0xFFFF)); out[7] = bf16_to_float(ushort(v.w >> 16));
+    }
+};
+
+struct FmtF32 {
+    static inline void load8(device const uchar* w, uint rowBytes, uint row, uint k, thread float* out) {
+        device const float4* q = (device const float4*)(w + row * rowBytes + k * 4);
+        const float4 a = q[0], b = q[1];
+        out[0] = a.x; out[1] = a.y; out[2] = a.z; out[3] = a.w;
+        out[4] = b.x; out[5] = b.y; out[6] = b.z; out[7] = b.w;
+    }
+};
+
+struct EpiStore {
+    static inline float4 apply(float4 v, device const float* aux, uint index) { return v; }
+};
+
+// y = gelu(aux) * y, where aux holds the gate projection at the same index.
+struct EpiGeglu {
+    static inline float4 apply(float4 v, device const float* aux, uint index) {
+        const float4 g = *(device const float4*)(aux + index);
+        return float4(gelu_tanh(g.x), gelu_tanh(g.y), gelu_tanh(g.z), gelu_tanh(g.w)) * v;
+    }
+};
+
+// y = gelu_quick(aux) * y, the vision tower's FFN activation.
+struct EpiGegluQuick {
+    static inline float4 apply(float4 v, device const float* aux, uint index) {
+        const float4 g = *(device const float4*)(aux + index);
+        return float4(gelu_quick(g.x), gelu_quick(g.y), gelu_quick(g.z), gelu_quick(g.w)) * v;
+    }
+};
+
+// y = gelu(y) * aux, where aux holds the per-layer input at the same index.
+struct EpiGeluTimes {
+    static inline float4 apply(float4 v, device const float* aux, uint index) {
+        const float4 a = *(device const float4*)(aux + index);
+        return float4(gelu_tanh(v.x), gelu_tanh(v.y), gelu_tanh(v.z), gelu_tanh(v.w)) * a;
+    }
+};
+
+template <int BM, int BN, int BK>
+constexpr int gemm_stage_floats() { return (BM + BN) * (BK + 4); }
+
+template <typename Fmt, typename Epi, int BM, int BN, int BK, int SG>
+inline void gemm_tile(device const float* X, device const uchar* W, device float* Y, constant GemmParams& p,
+                      device const float* aux, threadgroup float* stage, uint2 tgid, uint tid, uint sgid) {
+    constexpr int LD = BK + 4;
+    constexpr int THREADS = SG * 32;
+    constexpr int SN = BN / SG;
+    constexpr int TM = BM / 8, TN = SN / 8;
+    constexpr int STAGE = gemm_stage_floats<BM, BN, BK>();
+    constexpr int OUT_LD = BN + 4;
+    // Output rows staged per pass: the largest power-of-two fraction of BM that fits.
+    constexpr int FIT = STAGE / OUT_LD;
+    constexpr int PASS_ROWS = FIT >= BM ? BM : (FIT >= BM / 2 ? BM / 2 : (FIT >= BM / 4 ? BM / 4 : BM / 8));
+    constexpr int PASSES = BM / PASS_ROWS;
+    threadgroup float* Xs = stage;
+    threadgroup float* Ws = stage + BM * LD;
+
+    const uint m0 = tgid.y * BM;
+    const uint n0 = tgid.x * BN;
+    const uint K = p.K;
+
+    simdgroup_float8x8 acc[TM][TN];
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < TM; i++)
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++) acc[i][j] = simdgroup_float8x8(0.0f);
+
+    for (uint k0 = 0; k0 < K; k0 += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint u = tid; u < BM * BK / 4; u += THREADS) {
+            const uint row = u / (BK / 4), c4 = u % (BK / 4);
+            const float4 v = *(device const float4*)(X + (m0 + row) * K + k0 + c4 * 4);
+            threadgroup float* dst = Xs + row * LD + c4 * 4;
+            dst[0] = v.x; dst[1] = v.y; dst[2] = v.z; dst[3] = v.w;
+        }
+        for (uint u = tid; u < BN * BK / 8; u += THREADS) {
+            const uint row = u / (BK / 8), c8 = u % (BK / 8);
+            float vals[8];
+            Fmt::load8(W, p.weightRowBytes, n0 + row, k0 + c8 * 8, vals);
+            threadgroup float* dst = Ws + row * LD + c8 * 8;
+            for (int i = 0; i < 8; i++) dst[i] = vals[i];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        #pragma clang loop unroll(full)
+        for (int kk = 0; kk < BK; kk += 8) {
+            simdgroup_float8x8 a[TM];
+            simdgroup_float8x8 b[TN];
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < TM; i++)
+                simdgroup_load(a[i], Xs + i * 8 * LD + kk, LD);
+            #pragma clang loop unroll(full)
+            for (int j = 0; j < TN; j++)
+                simdgroup_load(b[j], Ws + (sgid * SN + j * 8) * LD + kk, LD, ulong2(0, 0), true);
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < TM; i++)
+                #pragma clang loop unroll(full)
+                for (int j = 0; j < TN; j++)
+                    simdgroup_multiply_accumulate(acc[i][j], a[i], b[j], acc[i][j]);
+        }
+    }
+
+    for (int pass = 0; pass < PASSES; pass++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int rowBase = pass * PASS_ROWS;
+        #pragma clang loop unroll(full)
+        for (int i = 0; i < TM; i++) {
+            const int row = i * 8 - rowBase;
+            if (row < 0 || row >= PASS_ROWS) continue;
+            #pragma clang loop unroll(full)
+            for (int j = 0; j < TN; j++)
+                simdgroup_store(acc[i][j], stage + row * OUT_LD + sgid * SN + j * 8, OUT_LD);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint u = tid; u < PASS_ROWS * BN / 4; u += THREADS) {
+            const uint row = u / (BN / 4), c4 = u % (BN / 4);
+            threadgroup const float* src = stage + row * OUT_LD + c4 * 4;
+            const uint index = (m0 + rowBase + row) * p.N + n0 + c4 * 4;
+            float4 v = float4(src[0], src[1], src[2], src[3]);
+            *(device float4*)(Y + index) = Epi::apply(v, aux, index);
+        }
+    }
+}
+
+template <typename Fmt, typename Epi, int BM, int BN, int BK, int SG>
+kernel void gemm_kernel(device const float* X [[buffer(0)]],
+                        device const uchar* W [[buffer(1)]],
+                        device float* Y [[buffer(2)]],
+                        constant GemmParams& p [[buffer(3)]],
+                        device const float* aux [[buffer(4)]],
+                        uint2 tgid [[threadgroup_position_in_grid]],
+                        uint tid [[thread_index_in_threadgroup]],
+                        uint sgid [[simdgroup_index_in_threadgroup]]) {
+    threadgroup float stage[gemm_stage_floats<BM, BN, BK>()];
+    gemm_tile<Fmt, Epi, BM, BN, BK, SG>(X, W, Y, p, aux, stage, tgid, tid, sgid);
+}
+
+template <typename Fmt, int BM, int BN, int BK, int SG>
+kernel void gemm3_kernel(device const float* X [[buffer(0)]],
+                         device const uchar* W0 [[buffer(1)]],
+                         device float* Y0 [[buffer(2)]],
+                         constant GemmParams& p [[buffer(3)]],
+                         device const uchar* W1 [[buffer(5)]],
+                         device const uchar* W2 [[buffer(6)]],
+                         device float* Y1 [[buffer(7)]],
+                         device float* Y2 [[buffer(8)]],
+                         uint3 tgid [[threadgroup_position_in_grid]],
+                         uint tid [[thread_index_in_threadgroup]],
+                         uint sgid [[simdgroup_index_in_threadgroup]]) {
+    threadgroup float stage[gemm_stage_floats<BM, BN, BK>()];
+    device const uchar* W = tgid.z == 0 ? W0 : (tgid.z == 1 ? W1 : W2);
+    device float* Y = tgid.z == 0 ? Y0 : (tgid.z == 1 ? Y1 : Y2);
+    gemm_tile<Fmt, EpiStore, BM, BN, BK, SG>(X, W, Y, p, X, stage, tgid.xy, tid, sgid);
+}
+
+#define GEMM_VARIANT(NAME, FMT, EPI, BM, BN, BK, SG) \
+    template [[host_name(NAME)]] kernel void gemm_kernel<FMT, EPI, BM, BN, BK, SG>( \
+        device const float*, device const uchar*, device float*, constant GemmParams&, device const float*, uint2, uint, uint);
+
+#define GEMM3_VARIANT(NAME, FMT, BM, BN, BK, SG) \
+    template [[host_name(NAME)]] kernel void gemm3_kernel<FMT, BM, BN, BK, SG>( \
+        device const float*, device const uchar*, device float*, constant GemmParams&, \
+        device const uchar*, device const uchar*, device float*, device float*, uint3, uint, uint);
+
+#define GEMM_TILE(SUFFIX, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_q8_" SUFFIX, FmtQ8, EpiStore, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_q8_geglu_" SUFFIX, FmtQ8, EpiGeglu, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_q8_gelutimes_" SUFFIX, FmtQ8, EpiGeluTimes, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_q8_gegluquick_" SUFFIX, FmtQ8, EpiGegluQuick, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_bf16_" SUFFIX, FmtBF16, EpiStore, BM, BN, BK, SG) \
+    GEMM_VARIANT("gemm_f32_" SUFFIX, FmtF32, EpiStore, BM, BN, BK, SG) \
+    GEMM3_VARIANT("gemm3_q8_" SUFFIX, FmtQ8, BM, BN, BK, SG)
+
+GEMM_TILE("32x32x32s4", 32, 32, 32, 4)
+GEMM_TILE("32x64x32s4", 32, 64, 32, 4)
+GEMM_TILE("64x32x32s4", 64, 32, 32, 4)
+GEMM_TILE("32x64x16s4", 32, 64, 16, 4)
+GEMM_TILE("64x64x16s4", 64, 64, 16, 4)
+GEMM_TILE("64x64x16s8", 64, 64, 16, 8)
+GEMM_TILE("64x64x32s8", 64, 64, 32, 8)
+GEMM_TILE("64x128x16s8", 64, 128, 16, 8)
+GEMM_TILE("64x64x16s2", 64, 64, 16, 2)
+GEMM_TILE("16x32x16s4", 16, 32, 16, 4)
+GEMM_TILE("16x32x16s2", 16, 32, 16, 2)
+GEMM_TILE("64x128x16s4", 64, 128, 16, 4)

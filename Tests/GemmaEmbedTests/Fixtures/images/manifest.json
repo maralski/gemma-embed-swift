@@ -1,0 +1,172 @@
+[
+  {
+    "file" : "scenes\/00-green-hills.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: rolling green hills striped with vineyard rows, a red barn and trees under a blue sky with white clouds"
+  },
+  {
+    "file" : "scenes\/01-ocean-sunset.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: the sun setting over a calm ocean, orange and purple sky, the sun's reflection on the water and a palm tree silhouette"
+  },
+  {
+    "file" : "scenes\/02-coral-reef.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: an underwater coral reef with orange and red corals, yellow and striped tropical fish and sun rays through blue water"
+  },
+  {
+    "file" : "scenes\/03-snowy-peaks.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: snow-capped grey mountain peaks above a pine forest, reflected in a still alpine lake"
+  },
+  {
+    "file" : "scenes\/04-desert-dunes.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: orange sand dunes with wind ripples, a green saguaro cactus and a hazy pale sky"
+  },
+  {
+    "file" : "scenes\/05-cherry-blossom.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: pink cherry blossoms on dark branches against a pale blue spring sky, petals falling"
+  },
+  {
+    "file" : "scenes\/06-lavender-field.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: rows of purple lavender running to the horizon, a lone tree and a stone farmhouse under a warm evening sky"
+  },
+  {
+    "file" : "scenes\/07-night-sky.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: a starry night sky with the Milky Way and a crescent moon above black mountains and a lit cabin"
+  },
+  {
+    "file" : "scenes\/08-sunflower-field.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: a field of bright yellow sunflowers with brown centres and green leaves under a summer sky"
+  },
+  {
+    "file" : "scenes\/09-city-skyline.jpg",
+    "kind" : "scene",
+    "note" : "procedural scene drawn by this script: a grey city skyline at dusk with lit office windows, a neon HOTEL sign and the towers reflected in a river"
+  },
+  {
+    "file" : "synthetic\/00-solid-red.png",
+    "kind" : "synthetic",
+    "note" : "solid rgb(220,30,30), png"
+  },
+  {
+    "file" : "synthetic\/01-solid-grey.png",
+    "kind" : "synthetic",
+    "note" : "solid rgb(128,128,128), png, 512 square"
+  },
+  {
+    "file" : "synthetic\/02-gradient-h.png",
+    "kind" : "synthetic",
+    "note" : "horizontal black to white gradient, png"
+  },
+  {
+    "file" : "synthetic\/03-gradient-rgb.jpg",
+    "kind" : "synthetic",
+    "note" : "vertical red to green to blue gradient, portrait jpeg"
+  },
+  {
+    "file" : "synthetic\/04-text-helvetica.jpg",
+    "kind" : "synthetic",
+    "note" : "white page with the words 'quarterly revenue report' in Helvetica"
+  },
+  {
+    "file" : "synthetic\/05-text-menlo.jpg",
+    "kind" : "synthetic",
+    "note" : "dark terminal with green monospaced code in Menlo"
+  },
+  {
+    "file" : "synthetic\/06-text-times.jpg",
+    "kind" : "synthetic",
+    "note" : "a headline in Times New Roman on cream"
+  },
+  {
+    "file" : "synthetic\/07-shapes.jpg",
+    "kind" : "synthetic",
+    "note" : "blue circle, yellow square and red triangle on white"
+  },
+  {
+    "file" : "synthetic\/08-checker.png",
+    "kind" : "synthetic",
+    "note" : "black and white checkerboard of 50 px squares, png"
+  },
+  {
+    "file" : "synthetic\/09-tiny-noise.png",
+    "kind" : "synthetic",
+    "note" : "small 200x150 deterministic colour noise, png (below the minimum pixel budget, gets upscaled)"
+  },
+  {
+    "file" : "variants\/00-green-hills-resized-0.5.jpg",
+    "kind" : "variant",
+    "note" : "resized to half width and height",
+    "source" : "scenes\/00-green-hills.jpg",
+    "variant" : "resized-0.5"
+  },
+  {
+    "file" : "variants\/01-ocean-sunset-cropped-10.jpg",
+    "kind" : "variant",
+    "note" : "central crop keeping 90 percent of each side",
+    "source" : "scenes\/01-ocean-sunset.jpg",
+    "variant" : "cropped-10"
+  },
+  {
+    "file" : "variants\/02-coral-reef-jpeg-q40.jpg",
+    "kind" : "variant",
+    "note" : "re-encoded as JPEG quality 40",
+    "source" : "scenes\/02-coral-reef.jpg",
+    "variant" : "jpeg-q40"
+  },
+  {
+    "file" : "variants\/03-snowy-peaks-flipped.jpg",
+    "kind" : "variant",
+    "note" : "flipped horizontally",
+    "source" : "scenes\/03-snowy-peaks.jpg",
+    "variant" : "flipped"
+  },
+  {
+    "file" : "variants\/04-desert-dunes-colour-shift.jpg",
+    "kind" : "variant",
+    "note" : "warmer colour cast (red +12, blue -12 per channel)",
+    "source" : "scenes\/04-desert-dunes.jpg",
+    "variant" : "colour-shift"
+  },
+  {
+    "file" : "variants\/05-cherry-blossom-resized-0.33.jpg",
+    "kind" : "variant",
+    "note" : "resized to a third",
+    "source" : "scenes\/05-cherry-blossom.jpg",
+    "variant" : "resized-0.33"
+  },
+  {
+    "file" : "variants\/06-lavender-field-cropped-10-top-left.jpg",
+    "kind" : "variant",
+    "note" : "top-left crop keeping 90 percent of each side",
+    "source" : "scenes\/06-lavender-field.jpg",
+    "variant" : "cropped-10-top-left"
+  },
+  {
+    "file" : "variants\/07-night-sky-jpeg-q40.jpg",
+    "kind" : "variant",
+    "note" : "re-encoded as JPEG quality 40",
+    "source" : "scenes\/07-night-sky.jpg",
+    "variant" : "jpeg-q40"
+  },
+  {
+    "file" : "variants\/08-sunflower-field-flipped.jpg",
+    "kind" : "variant",
+    "note" : "flipped horizontally",
+    "source" : "scenes\/08-sunflower-field.jpg",
+    "variant" : "flipped"
+  },
+  {
+    "file" : "variants\/09-city-skyline-colour-shift.jpg",
+    "kind" : "variant",
+    "note" : "warmer colour cast (red +12, blue -12 per channel)",
+    "source" : "scenes\/09-city-skyline.jpg",
+    "variant" : "colour-shift"
+  }
+]

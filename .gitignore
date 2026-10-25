@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+*.xcodeproj
+*.gguf
+autotune.json
+.DS_Store
+.audit/
+models/
