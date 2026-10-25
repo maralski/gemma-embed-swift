@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+Audio embeddings, in the same 768-dimensional space as the text and image embeddings.
+
+- `LoadOptions.audioEncoder` loads the `gemma4a` audio tower from `mmproj-embeddinggemma-2-Q8_0.gguf`,
+  the file that also holds the image encoder; one file serves either tower or both.
+  `ModelInfo.audioEncoder` reports it.
+- `embed(audios:options:progress:)` and `embed(audio:options:)` over `AudioInput` (a file URL,
+  encoded bytes or PCM samples with their rate and channel count), with `AudioEmbedOptions`
+  (`dimensions`, `normalise`, `maxTokens`, `batchSize`). A clip costs one row per 40 ms; a clip
+  over `maxTokens` is refused rather than cut.
+- `MultimodalInput.Part.audio`: text, images and clips in one sequence, each clip framed with
+  `<|audio>` and `<audio|>` where its part sits.
+- Decoding as llama.cpp's miniaudio does it: a WAV parser with dr_wav's conversions and a port of
+  miniaudio's downmix and linear resampler, bit-identical on 32 WAV variants; other codecs through
+  AVFoundation. The log-mel front end (128 bins, 10 ms hop, 20 ms window, 30 s chunks) follows
+  `mtmd_audio_preprocessor_gemma4a`.
+- The Conformer tower on Metal: fp16-rounded subsampling convolutions with channel LayerNorm,
+  clipped linears, half-step SiLU feed-forwards, 12-frame causal attention with sinusoidal
+  relative keys and a tanh soft cap, the GLU and causal depthwise convolution module, and the
+  output projections. Written for parity, not speed; a hill climb follows.
+- Parity with llama.cpp build 11716: min cosine 0.99998933 over the 29 synthetic fixture clips;
+  every graph node of eight dumped chunks within 2.7e-4; ten spoken sentences rank their own
+  transcript first with llama-server's ranks.
+- CLI: `--audio-encoder`, `--audio`, `--parity-audio`, `--bench-audio`, `--profile-audio`;
+  `--info` reports the audio encoder.
+- Fixtures and scripts: `scripts/make_fixture_audio.py` (29 synthetic clips, 3.8 MB),
+  `scripts/oracle_audio.py`, `scripts/make_speech_samples.sh`, `scripts/make_decode_checks.py`,
+  `scripts/audio_dump.cpp` (a `libmtmd` harness that dumps the audio graph nodes) and
+  `scripts/compare_llamacpp_audio.py`.
+- Internal: `ImageMarkers` is now `SpanMarkers` and frames both modalities; the text workspace owns
+  the vectors buffer both towers write into.
+- Text and image APIs unchanged.
+
 ## 0.3.0 (2026-10-25)
 
 Text and images in one input.

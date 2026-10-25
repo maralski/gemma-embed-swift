@@ -1,10 +1,10 @@
 # GemmaEmbed
 
-GemmaEmbed runs Google's EmbeddingGemma 2 text and image encoders in-process on Apple Silicon
-with its own Metal kernels. It is a Swift package with no dependencies beyond the Apple SDK: no
-llama.cpp, no MLX, no Core ML. You hand it the official GGUF weight files and get 768-dimensional
-embeddings that match llama.cpp's to a cosine similarity of 0.99999 for text and 0.99999 for
-images, in one shared space.
+GemmaEmbed runs Google's EmbeddingGemma 2 text, image and audio encoders in-process on Apple
+Silicon with its own Metal kernels. It is a Swift package with no dependencies beyond the Apple
+SDK: no llama.cpp, no MLX, no Core ML. You hand it the official GGUF weight files and get
+768-dimensional embeddings that match llama.cpp's to a cosine similarity of 0.99999 for text,
+0.99999 for images and 0.99998 for audio, in one shared space.
 
 ## Supported model
 
@@ -16,8 +16,9 @@ images, in one shared space.
 | SHA256 | `2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135` |
 | Output | 768 dimensions, Matryoshka truncation to 512, 256 or 128 |
 | Input | up to 8192 tokens per text (default limit 2048), any number of texts per call |
-| Image encoder (optional) | `mmproj-embeddinggemma-2-Q8_0.gguf` from the same repository, 554,821,024 bytes, SHA256 `c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f` (GGUF projector `gemma4v`, 16 layers, 473M parameters with the unused audio tower) |
+| Image and audio encoders (optional) | `mmproj-embeddinggemma-2-Q8_0.gguf` from the same repository, 554,821,024 bytes, SHA256 `c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f` (GGUF projectors `gemma4v`, 16 layers, and `gemma4a`, 12 Conformer layers; 473M parameters in all) |
 | Image input | JPEG, PNG, HEIC and anything else ImageIO reads, or a `CGImage`; any size, scaled to 70 to 1120 vision tokens (default cap 256) |
+| Audio input | WAV (parsed by GemmaEmbed), MP3, M4A, AIFF, CAF, FLAC (through AVFoundation) or PCM samples; any rate and channel count, resampled to 16 kHz mono; 25 rows per second, up to 5 minutes 27 seconds per clip |
 | Platform | macOS 14 or later on Apple Silicon, Swift 6 |
 
 The forward pass is documented in [Sources/GemmaEmbed/Model/Architecture.md](Sources/GemmaEmbed/Model/Architecture.md).
@@ -36,7 +37,7 @@ targets: [
 ```
 
 In Xcode, choose File > Add Package Dependencies and enter the same URL. The weights are not
-part of the package. Download `embeddinggemma-2-Q8_0.gguf` (and, for images,
+part of the package. Download `embeddinggemma-2-Q8_0.gguf` (and, for images and audio,
 `mmproj-embeddinggemma-2-Q8_0.gguf`) from the Hugging Face repository above.
 
 For a side-by-side comparison with llama.cpp (accuracy, speed, features, when to use which),
@@ -236,6 +237,71 @@ python3 scripts/ab_images.py --a /path/to/old/gemma-embed --b .build/release/gem
 `scripts/ab_images.py` runs two builds alternately and checks image parity, text parity and that
 the candidate's vectors match the baseline's.
 
+## Audio embeddings
+
+Load the model with the audio encoder, which lives in the same mmproj file as the image encoder,
+and embed files, bytes or samples. The vectors live in the same space as the text and image
+embeddings, so a spoken sentence can be scored against its transcript, and a sound against a
+caption.
+
+```swift
+let model = try await EmbeddingModel.load(from: textURL, options: LoadOptions(audioEncoder: mmprojURL))
+let clips = try await model.embed(audios: [.url(wavURL), .data(mp3Bytes), .samples(pcm, sampleRate: 44100, channels: 2)])
+let transcript = try await model.embed("the train now departs from platform four", options: EmbedOptions(task: .query))
+let score = model.similarity(transcript, clips[0])
+print(model.info.audioEncoder?.layerCount)   // 12 when loaded, nil otherwise
+```
+
+`AudioEmbedOptions` carries the same `dimensions` and `normalise` as text, `batchSize` (clips per
+GPU batch, by default packed by mel frames, two minutes of audio per batch) and `maxTokens`. A
+clip costs one row per 40 ms plus four frame tokens; `maxTokens` defaults to the model's 8192
+rows, which is 5 minutes 27 seconds, and a longer clip is refused with `invalidOptions` rather
+than cut, because llama.cpp does not cut audio either. Pass the mmproj file as `imageEncoder`,
+`audioEncoder` or both; the file is mapped once and only the towers asked for are built. Embedding
+audio without the encoder throws `audioEncoderNotLoaded`.
+
+The encoder sees llama.cpp's front end exactly: miniaudio's decode and resample to 16 kHz mono
+(WAV bit for bit, including resampled and multichannel files; other codecs decode through
+AVFoundation, so an MP3 sits within 3e-5 per sample of llama.cpp's), 128 log-mel bins every 10 ms
+over a 20 ms window, and a split into 30 second chunks that the tower encodes one by one. A
+`MultimodalInput` takes `.audio` parts beside `.text` and `.image` parts, framed with `<|audio>`
+and `<audio|>` where they sit. The front end and the tower are documented in
+[Sources/GemmaEmbed/Model/Architecture.md](Sources/GemmaEmbed/Model/Architecture.md).
+
+### Audio parity
+
+Reference vectors come from llama.cpp build 11716 (`llama-server --embedding --mmproj -ub 8192`)
+over the same Q8_0 files, and per-node dumps of its audio graph taken through `libmtmd`'s eval
+callback (`scripts/audio_dump.cpp`). Every fixture clip is synthesised by
+`scripts/make_fixture_audio.py`: tones, a chord, bursts, chirps, noise, clicks, AM and FM signals,
+silence, 0.3 to 7 second signals, the same signal at 8, 22.05, 44.1 and 48 kHz, in stereo and four
+channels, and as 8, 24 and 32-bit integer and float32 WAV, plus a 30.0 s clip and a 35 s clip
+that crosses the chunk boundary. No recordings and no voices are in the repository.
+`scripts/oracle_audio.py` writes the reference vectors from a running llama-server.
+
+| Check | Result |
+|---|---|
+| WAV decode and miniaudio's downmix and resample, 32 variants (bit depths, 3 to 6 channels, 8 to 96 kHz) | bit-identical to miniaudio's samples |
+| Log-mel front end vs llama.cpp's graph input, 7 clips | bins with energy within 3e-5; bins at the 0.001 floor within 2.4e-3 |
+| CPU reference audio tower vs llama.cpp per-node sums, 8 chunks, 2448 nodes | within 2.7e-4 of the absolute sum |
+| CPU reference vs llama.cpp, 589 full tensors | cosine 0.999995 or better |
+| Metal audio tower vs CPU reference, 6 clips | row cosine 0.999999 or better |
+| Metal audio embeddings vs llama-server, all 29 fixture clips | min cosine 0.99998933 (the 35 s clip), max abs diff 7.2e-4 |
+| Same clip alone and inside a batch of 5 mixed lengths, first or last | bit-identical |
+| Text and image parity | unchanged (see Image parity and Parity) |
+
+Run `swift test -c release` to reproduce (see Tests), or
+`gemma-embed --parity-audio Tests/GemmaEmbedTests/Fixtures/audio`.
+
+### Cross-modal check
+
+Ten sentences spoken by macOS `say` (`scripts/make_speech_samples.sh`, not in the repository) are
+scored against their ten transcripts and five off-topic texts, all embedded as queries. Every
+clip ranks its own transcript first, by 0.18 or more over the next text, and llama-server's own
+vectors give the same ranks; GemmaEmbed's similarities agree with llama-server's within 1e-4. Own
+cosines run from 0.80 to 0.90, and the smallest margin is a recipe step whose nearest other text
+is the other cooking sentence. The test skips when the speech folder is absent.
+
 ## Command line
 
 ```
@@ -251,6 +317,10 @@ export GEMMA_EMBED_IMAGE_WEIGHTS=/path/to/mmproj-embeddinggemma-2-Q8_0.gguf
 .build/release/gemma-embed --profile-images ~/Pictures --batch-size 1
 .build/release/gemma-embed --bench posts.json --runs 3
 .build/release/gemma-embed --profile posts.json
+.build/release/gemma-embed --audio talk.wav ~/Recordings
+.build/release/gemma-embed --parity-audio Tests/GemmaEmbedTests/Fixtures/audio
+.build/release/gemma-embed --bench-audio ~/Recordings --runs 3
+.build/release/gemma-embed --profile-audio ~/Recordings --batch-size 1
 ```
 
 `gemma-embed` prints one JSON object per input line. `--parity` checks the tokenizer and the
@@ -260,7 +330,11 @@ one document per line. Image modes take the mmproj file from `--image-encoder` o
 `$GEMMA_EMBED_IMAGE_WEIGHTS`: `--images FILE... | DIR` prints one JSON vector per image,
 `--parity-images DIR` checks a fixtures folder (`manifest.json` and `embeddings.jsonl`) and
 `--bench-images DIR` measures images per second, by default with patch-count batching, 8 and 1
-images per batch (`--batch-size auto` or `N` picks one). `--help` lists the rest.
+images per batch (`--batch-size auto` or `N` picks one). Audio modes take the same mmproj file
+from `--audio-encoder`, `$GEMMA_EMBED_AUDIO_WEIGHTS` or the image encoder path: `--audio FILE... |
+DIR` prints one JSON vector per clip with its row count and seconds, `--parity-audio DIR` checks a
+fixtures folder, `--bench-audio DIR` measures audio seconds per wall second and per GPU second,
+and `--profile-audio DIR` times each audio kernel class. `--help` lists the rest.
 
 ## Packaging
 
@@ -301,8 +375,10 @@ overrides each path, and a test whose input is missing skips.
 | `models/dumps/` | llama.cpp's vision graph for six images (`scripts/vision_dump.cpp`) | `GEMMA_EMBED_VISION_DUMPS` |
 | `models/dumps-rgb/` | stb_image's decode of every JPEG fixture (`scripts/vision_dump.cpp`) | `GEMMA_EMBED_DECODED_RGB_DUMPS` |
 | `models/fixtures/images/` | the full image fixture set from `scripts/make_fixture_images.swift`, including the lavender field scene and its variant, which are over 250 KB and not in the package | none |
+| `models/audio/dumps/` | llama.cpp's audio graph for seven clips (`scripts/audio_dump.cpp`) and miniaudio's decode of the decode-check WAVs (`scripts/make_decode_checks.py`) | `GEMMA_EMBED_AUDIO_DUMPS` |
+| `models/audio/speech/` | ten spoken sentences from `scripts/make_speech_samples.sh` with llama-server's vectors from `scripts/oracle_audio.py --speech` | none |
 
-`scripts/vision_dump.cpp` lists the commands that write both dump directories.
+`scripts/vision_dump.cpp` and `scripts/audio_dump.cpp` list the commands that write the dump directories.
 
 ## Parity
 
@@ -401,7 +477,8 @@ The kernels follow these design rules:
 
 - iOS and visionOS targets (the code has no macOS-only dependency beyond the platform entry).
 - BF16 and F16 weight files.
-- The audio encoder of the EmbeddingGemma 2 family (its tensors are in the mmproj file, unused).
+- Faster audio: the audio kernels are written for parity first (one thread per element, separate
+  clamp passes, a recursive FFT), and the GPU encodes about 220 seconds of audio per second.
 - Overlapping image decoding with the GPU forward (worth about 5 percent at batch 8).
 - Fusing the QKV projections and the per-layer-input gate into fewer dispatches.
 

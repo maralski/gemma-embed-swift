@@ -145,3 +145,121 @@ An input of text and images follows the same rule. `mtmd` tokenizes each text pa
 tokens, puts each image's vectors between `<|image>` and `<image|>` where its `<|image|>`
 placeholder sat, and adds one BOS and one EOS around the whole, with nothing else in between:
 `[BOS] text [<|image>] v... [<image|>] text ... [EOS]`, positions 0 to N - 1.
+
+# Audio encoder
+
+Worked out from the `a.*` and `mm.a.*` tensors of `mmproj-embeddinggemma-2-Q8_0.gguf` and from
+llama.cpp build 11716 (`tools/mtmd/models/gemma4a.cpp`, `clip.cpp`, `mtmd-audio.cpp`, `mtmd.cpp`,
+`mtmd-helper.cpp`), confirmed against per-node dumps of its audio graph taken through the
+`cb_eval` callback of `libmtmd` (`scripts/audio_dump.cpp`). The GGUF calls the projector `gemma4a`.
+The CPU reference in `CPUAudioReference.swift` and the Metal tower in `AudioTower.swift` both
+implement exactly this.
+
+Shapes use `F` log-mel frames per chunk, `T` tokens per chunk, `da = 1024` hidden, `ffa = 4096`,
+`Ha = 8` heads of `hda = 128`, 12 layers. Every norm is an RMS norm with `eps = 1e-6` unless named
+otherwise; llama.cpp hard-codes that value because the GGUF's `layer_norm_epsilon` was written
+wrong by the converter.
+
+## Decoding (what llama.cpp's miniaudio does, replicated exactly)
+
+llama.cpp decodes every sound file with miniaudio into float32 mono at 16 kHz. `WAVDecoder` reads
+WAV (PCM 8, 16, 24 and 32-bit, float 32 and 64, `WAVE_FORMAT_EXTENSIBLE`) with dr_wav's integer to
+float conversions, `MiniaudioConverter` reproduces `ma_data_converter` (channels averaged in order
+to mono first, then `ma_linear_resampler` with its two Butterworth low-pass biquads, fixed-point
+fraction and `ma_calculate_frame_count_after_resampling` output length), and the decode tests
+compare against miniaudio's own samples for 32 WAV variants, bit for bit, resampled rates
+included. Other formats (MP3, M4A, AIFF, CAF, FLAC) go through AVFoundation at the file's own rate
+and channel count and then through the same converter; only the codec differs from llama.cpp's
+dr_mp3 or dr_flac (an MP3 decoded by both sits within 3e-5 per sample). `.samples` inputs are
+taken as given and converted the same way.
+
+## Front end (`mtmd_audio_preprocessor_gemma4a`)
+
+1. Cut the samples into chunks of 30 s (480000 samples); the last chunk is whatever remains. A
+   clip of a single sample has no frame and is refused; two samples give one frame.
+2. Per chunk, put 160 zeros in front and enough zeros behind for the last frame, and take
+   `F = (n + 160 - 321) / 160 + 1` frames of 512 samples every 160 samples (10 ms). The window is a
+   periodic 320-sample Hann (20 ms) zero-padded to 512, so a frame is centred on `160 i` and sees
+   10 ms either side.
+3. 512-point FFT, magnitudes (`sqrt(re^2 + im^2)`, not powers), 128 triangular HTK mel filters
+   from 0 Hz to 8 kHz with no area normalisation, `max(sum, 0.001)`, natural log. The tensor is
+   `[F][128]`. GemmaEmbed's fp32 FFT agrees with llama.cpp's to 3e-5 in bins with energy and to
+   2.4e-3 in bins at the floor, where roundoff relative to the frame's peak is magnified by the log.
+4. Token count per chunk: `T = ceil(ceil(F / 2) / 2)` (two convolutions of kernel 3, stride 2,
+   padding 1), so 30 s gives 2999 frames and 750 tokens, 25 tokens per second. llama.cpp splits
+   at exactly 480000 samples, and a 35 s clip is 750 + 125 tokens.
+
+## Audio tower
+
+```
+m = log_mel rounded to fp16                                           [F, 128]        (ggml's conv2d runs its im2col in fp16)
+c0 = relu(layernorm_ch(conv3x3_s2_p1(m, 1 -> 128 channels)) * w)       [F/2, 64, 128]  (a.conv1d.0; LayerNorm over the channels, eps 1e-6, no bias)
+c1 = relu(layernorm_ch(conv3x3_s2_p1(fp16(c0), 128 -> 32)) * w)        [T, 32, 32]     (a.conv1d.1)
+x = flatten(c1) @ Winp^T                                               [T, da]         (row = freq * 32 + channel; a.input_projection, f32, no clamp)
+
+for each of the 12 layers:                                             (every linear below is a Gemma4ClippableLinear, see Facts)
+  x = x + 0.5 * rmsnorm(down(silu(up(rmsnorm(x, ffn_norm)))), ffn_post_norm)            up: da -> ffa, down: ffa -> da
+  h = rmsnorm(x, attn_pre_norm)
+  q = (h @ Wq^T) * (1 / sqrt(hda)) / ln 2 * per_dim_scale;  k = (h @ Wk^T) * softplus(1) / ln 2;  v = h @ Wv^T
+  krel[d] = Wkrel @ sinusoid(d)   for d = 0 ... 12                     sin over dims 0..511 and cos over 512..1023 of position d, timescales 10000^(-i/511)
+  score(t, j) = 50 tanh((q_t . k_j + q_t . krel[t - j]) / 50)          for j in max(chunk start, t - 11) ... t, per head
+  x = x + rmsnorm(softmax_j(score) v @ Wo^T, attn_post_norm)
+  h = rmsnorm(x, conv_norm)
+  g = pw1(h)[:, :da] * sigmoid(pw1(h)[:, da:])                          pw1: da -> 2 da
+  y[t] = sum_k g[t + k - 4] * w_dw[:, k]                               causal depthwise kernel 5 within the chunk (ggml_ssm_conv)
+  x = x + pw2(silu(rmsnorm(y, norm_conv)))                             pw2: da -> da
+  x = x + 0.5 * rmsnorm(down_1(silu(up_1(rmsnorm(x, ffn_norm_1)))), ffn_post_norm_1)
+  x = rmsnorm(x, ln2)
+
+o = rmsnorm(x @ Wout^T + bout, none)                                   [T, 1536]       (a.pre_encode.out, no clamp)
+vectors = o @ Wproj^T                                                  [T, 512]        (mm.a.input_projection, Q8_0)
+```
+
+Facts that were not obvious from the tensor names alone:
+
+- Every `a.blk.*` linear except `attn_k_rel` is a `Gemma4ClippableLinear`: its input is clamped to
+  `[input_min, input_max]` and its output to `[output_min, output_max]`, four scalars stored beside
+  the weight. The bounds are active (a layer-0 FFN input of 12.9 is cut at 12.8125). `q`, `k` and `v`
+  share one set of bounds in every layer, so one clamped copy of the normed input feeds all three.
+  llama.cpp registers clamps for every weight and defaults the missing ones to the float range,
+  which is why the dumps show no-op `CLAMP` nodes around the unclamped projections too.
+- The attention is local and causal: a frame sees itself and the 11 frames before it, within its
+  chunk. llama.cpp computes it as blocked attention over 12-query blocks with a 24-key context and
+  a Transformer-XL relative shift; the mask and the shift reduce to the window above with the
+  relative key indexed by the distance `t - j`. `per_dim_scale` is stored after its softplus.
+- The score soft cap is `50 tanh(s / 50)`, applied before the softmax, with no further scale.
+- The two feed-forwards are half steps: their normed output is added with weight 0.5. The
+  attention and convolution residuals are added with weight 1.
+- The convolution module's norm weights are swapped in the GGUF: `conv_norm` is the norm before
+  the module and `norm_conv` the norm after the depthwise convolution, as llama.cpp's loader reads
+  them.
+- Every layer ends with `ln2`, and the last layer's normed output is what `a.pre_encode.out`
+  projects. The multimodal embedder's norm (`rms_norm` over 1536) has no weight; the GGUF has no
+  `mm.a.soft_emb_norm`.
+- The two convolutions have no bias; their LayerNorm (`ggml_norm`, mean and variance over the
+  channels) has a weight and no bias.
+
+## Into the text tower
+
+`mtmd` wraps the `T` vectors of every chunk, in order, as one span for the text model:
+
+```
+[BOS] [<|audio> = 256000] v_1 ... v_T(chunk 1) ... v(chunk n) [<audio|> = 258883] [EOS]
+```
+
+The frame tokens are ordinary token embeddings scaled by `sqrt(512)`; the audio rows enter the
+residual stream unscaled, as the image rows do. A 30 s clip is therefore 754 rows, and the text
+model's 8192 rows hold 5 minutes 27 seconds of audio. Inside a `MultimodalInput`, every image and
+clip keeps its own frame tokens where its part sits among the texts:
+`[BOS] text [<|image>] v... [<image|>] text [<|audio>] a... [<audio|>] ... [EOS]`.
+
+Chunks are independent: the front end, the convolutions' zero padding and the attention window all
+restart at a chunk boundary, so a 35 s clip embeds differently from the same audio presented as one
+sequence would. GemmaEmbed reproduces the split.
+
+Parity (CPU reference and Metal against llama.cpp build 11716): over eight dumped chunks every one of
+the 2448 graph node sums agrees within 2.7e-4 of the node's absolute sum, and 589 full tensors agree
+to cosine 0.999995 or better. llama.cpp's Metal backend runs its Q8_0 matmuls over long sequences
+with fp16 activation tiles, so a few output rows of a 750-token chunk sit at cosine 0.999 while the
+median row is 0.9999996 and the mean-pooled rows are 0.9999998. Over the 29 fixture clips the final
+embeddings agree with llama-server to cosine 0.99998933 or better.
