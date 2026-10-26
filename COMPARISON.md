@@ -1,12 +1,12 @@
 # GemmaEmbed and llama.cpp
 
-This page compares GemmaEmbed with llama.cpp for one job, EmbeddingGemma 2 text and image
+This page compares GemmaEmbed with llama.cpp for one job, EmbeddingGemma 2 text, image and audio
 embeddings on a Mac with Apple Silicon. llama.cpp is the reference that GemmaEmbed is checked
 and benchmarked against. Both read the same GGUF files, `embeddinggemma-2-Q8_0.gguf` and
 `mmproj-embeddinggemma-2-Q8_0.gguf`.
 
 Every number here comes from [README.md](README.md), [CHANGELOG.md](CHANGELOG.md) or a run made
-on 2026-10-25 for this page, and each table names its source. All of them come from one
+on 2026-10-25 or 2026-10-26 for this page, and each table names its source. All of them come from one
 machine, an Apple M3 Max (40 GPU cores, 128 GB) running macOS 26, and from llama.cpp 0.7.0-dev
 build 11716 (commit `797de63b2`, the Homebrew `--HEAD` build).
 
@@ -48,6 +48,11 @@ the two engines compute the same thing, not that either is closer to the fp32 mo
 | Image embeddings, 153 feed pictures (private corpus) at cap 256, GemmaEmbed 0.3.0 against llama-server | min cosine 0.99991, median 0.9999996 | measured 2026-10-25 |
 | Image preprocessing on 6 images, and JPEG decoding on 36 JPEGs | byte-identical to llama.cpp and stb_image | README, Image parity |
 | Caption ranking, 5 scenes against 10 captions | every scene ranks its own caption first, the same ranks as llama-server's own vectors | README, Cross-modal check |
+| WAV decoding with miniaudio's downmix and resampler, 32 variants (bit depths, 3 to 6 channels, 8 to 96 kHz) | bit-identical to miniaudio's samples, the decoder llama.cpp uses | README, Audio parity |
+| Audio embeddings, 29 synthetic fixture clips, GemmaEmbed 0.4.0 against `llama-server --embedding --mmproj` | min cosine 0.99998933, max abs diff 7.2e-4 | README, Audio parity |
+| Audio embeddings, 40 spoken clips (715 s, not in the repository), GemmaEmbed 0.4.0 against llama-server | min cosine 0.9999994, median 0.9999999 | measured 2026-10-26 |
+| Spoken sentences, 10 clips against their transcripts and 5 off-topic texts | every clip ranks its own transcript first by 0.17 or more, the same ranks as llama-server's own vectors | README, Audio embeddings, Cross-modal check |
+| One input of text, a photo, more text and a 3 s spoken clip (359 rows) | cosine 0.9999997, max abs diff 9.3e-5 | README, Text, images and audio together |
 
 A corpus embedded with one engine can be searched with queries embedded by the other. The task
 prefix and the image cap must match. llama-server caps images at 256 vision tokens with its
@@ -152,8 +157,8 @@ cosine 0.9999994 over the same clips. llama-server logs that its audio input is 
 
 llama.cpp is a general inference engine. GemmaEmbed runs one model family and nothing else.
 
-- llama.cpp runs many model architectures, for text generation, chat, embeddings, reranking and
-  vision.
+- llama.cpp runs many model architectures, for text generation, chat, embeddings, reranking,
+  vision and audio.
 - It runs on Linux and Windows as well as macOS, with CPU, CUDA, Vulkan and other backends
   besides Metal.
 - It reads BF16, F16 and F32 weight files and the quantized GGUF formats. GemmaEmbed reads the
@@ -165,11 +170,15 @@ llama.cpp is a general inference engine. GemmaEmbed runs one model family and no
 ## What GemmaEmbed offers
 
 - A Swift API that runs inside your process. `embed` is an `async` call that returns `[[Float]]`.
-  There is no server to start, no port, no JSON and no base64 for images.
+  There is no server to start, no port, no JSON and no base64 for images or audio.
 - No dependencies beyond the Apple SDK, so adding it is one SwiftPM package.
 - Images as a file URL, encoded bytes or a `CGImage`, including HEIC and anything else ImageIO
   reads. JPEG and PNG decode exactly as llama.cpp decodes them.
-- Text and images mixed in one input (`MultimodalInput`), in the sequence that llama.cpp's
+- Audio as a file URL, encoded bytes or PCM samples at any rate and channel count. WAV decodes
+  exactly as llama.cpp's miniaudio decodes it; MP3, M4A and other formats go through AVFoundation
+  (an MP3 lands within 3e-5 per sample of llama.cpp's). Clips up to the model's 8192 rows, about
+  5 minutes 27 seconds, embed whole.
+- Text, images and audio mixed in one input (`MultimodalInput`), in the sequence that llama.cpp's
   `mtmd` builds.
 - Matryoshka truncation to 512, 256 or 128 dimensions, and L2 normalisation, as `EmbedOptions`
   fields.
@@ -182,14 +191,14 @@ llama.cpp is a general inference engine. GemmaEmbed runs one model family and no
 
 ## What it costs to integrate
 
-Measured on 2026-10-25 from the release build of this repository and from the Homebrew
-`llama.cpp` HEAD-797de63 and `ggml` 0.27.0 installs.
+GemmaEmbed measured on 2026-10-26 from the 0.4.0 release build of this repository; llama.cpp on
+2026-10-25 from the Homebrew `llama.cpp` HEAD-797de63 and `ggml` 0.27.0 installs.
 
-| | GemmaEmbed 0.3.0 | llama.cpp build 11716 |
+| | GemmaEmbed 0.4.0 | llama.cpp build 11716 |
 |---|---|---|
 | Add to a project | one SwiftPM dependency | build with CMake or install a package, then run `llama-server` as a separate process |
-| Run-time libraries | Apple system frameworks only: Metal, Accelerate, ImageIO, CoreGraphics, CryptoKit and Foundation | `libllama`, `libllama-common`, `libmtmd`, `libllama-server-impl`, `libggml`, `libggml-base`, the ggml Metal and CPU backends, and OpenSSL |
-| On disk | the `gemma-embed` executable with the library linked in, 1,507,400 bytes, plus an optional 52 KB shader bundle (the shader source is also compiled into the library) | `llama-server`, 33,472 bytes, plus 13,090,432 bytes of llama.cpp dylibs and 6,722,640 bytes of ggml libraries with the Metal backend and the M2 and M3 CPU backend |
+| Run-time libraries | Apple system frameworks only: Metal, Accelerate, ImageIO, CoreGraphics, AVFoundation (for audio other than WAV), CryptoKit and Foundation | `libllama`, `libllama-common`, `libmtmd`, `libllama-server-impl`, `libggml`, `libggml-base`, the ggml Metal and CPU backends, and OpenSSL |
+| On disk | the `gemma-embed` executable with the library linked in, 2,027,704 bytes, plus an optional 68 KB shader bundle (the shader source is also compiled into the library) | `llama-server`, 33,472 bytes, plus 13,090,432 bytes of llama.cpp dylibs and 6,722,640 bytes of ggml libraries with the Metal backend and the M2 and M3 CPU backend |
 | Model load | 0.27 s with a warm shader cache, about 1 s after a build (README, Performance) | not measured here |
 | Process model | in your process, so a crash in GemmaEmbed is a crash in your app | a separate process that you start, health-check and restart |
 
@@ -207,11 +216,11 @@ Use llama.cpp when:
 Use GemmaEmbed when:
 
 - Your app is written in Swift, runs on a Mac with Apple Silicon, and embeds EmbeddingGemma 2
-  text or images.
+  text, images or audio.
 - You want no server process and no libraries outside the Apple SDK.
 - Query latency or batch throughput matters, per the measurements above.
-- You want mixed text and image inputs, Matryoshka truncation, progress or cancellation from a
-  Swift call.
+- You want mixed text, image and audio inputs, Matryoshka truncation, progress or cancellation
+  from a Swift call.
 
 The two engines' vectors agree to within the cosines above, so you can mix them. For example, a
 Linux server can build the index with llama.cpp and a Mac app can embed queries with GemmaEmbed,
@@ -303,9 +312,26 @@ folder of JPEGs reproduces the method but not the figures. Each round prints Gem
 and llama-server's summed `prompt_tokens` for the folder. If the two differ, the engines used
 different image caps.
 
+### Audio
+
+`gemma-embed --parity-audio` checks the audio fixtures against llama-server's vectors, and
+`scripts/compare_llamacpp_audio.py` made the audio throughput table above. The spoken clips are
+generated with macOS `say` and are not in the repository; `scripts/make_speech_bench.py`
+regenerates the same 40 clips and transcripts.
+
+```
+.build/release/gemma-embed --audio-encoder /path/to/mmproj-embeddinggemma-2-Q8_0.gguf --parity-audio Tests/GemmaEmbedTests/Fixtures/audio
+python3 -I scripts/make_speech_bench.py models/audio/bench
+python3 -I scripts/compare_llamacpp_audio.py models/audio/bench 5
+```
+
+`scripts/make_fixture_audio.py` synthesises the fixture clips (tones, chirps, noise and the
+format variants; no recordings), and `scripts/oracle_audio.py` writes their reference vectors from
+a running llama-server.
+
 ### Comparing two GemmaEmbed builds
 
-`scripts/ab_bench.py` and `scripts/ab_images.py` do not run llama.cpp. They compare two
+`scripts/ab_bench.py`, `scripts/ab_images.py` and `scripts/ab_audio.py` do not run llama.cpp. They compare two
 `gemma-embed` builds, and the README's version-to-version numbers come from them. Each runs the
 two builds alternately (A B B A ...) under the GPU lock in `/tmp/gemma-embed-gpu.lock`, so drift
 hits both alike.
@@ -316,8 +342,11 @@ hits both alike.
 - `ab_images.py` times `--bench-images` with batching by patch count and with one image per
   batch. It calls a difference from the median of per-pair ratios, which must clear 3 percent
   and have its interquartile range on one side of 1.
-- Both then gate the candidate on quality: llama.cpp text parity, llama-server image parity for
-  `ab_images.py`, and a direct comparison of the candidate's vectors against the baseline's.
+- `ab_audio.py` does the same with `--bench-audio`, batching by mel frames and one clip per
+  batch, and reports wall and GPU verdicts separately.
+- All of them then gate the candidate on quality: llama.cpp text parity, llama-server image or
+  audio parity for `ab_images.py` and `ab_audio.py`, and a direct comparison of the candidate's
+  vectors against the baseline's.
 
 `scripts/gpulock.py -- COMMAND` runs any other command under the same lock. On a shared machine,
 interleave the engines and hold the lock, as these scripts do.
