@@ -515,12 +515,13 @@ The kernels follow these design rules:
 
 ## Roadmap
 
-- iOS and visionOS targets (the code has no macOS-only dependency beyond the platform entry).
-- BF16 and F16 weight files.
-- Faster audio: the audio kernels are written for parity first (one thread per element, separate
-  clamp passes, a recursive FFT), and the GPU encodes about 220 seconds of audio per second.
-- Overlapping image decoding with the GPU forward (worth about 5 percent at batch 8).
-- Fusing the QKV projections and the per-layer-input gate into fewer dispatches.
+- iOS and visionOS targets. With `.iOS(.v18)` added to the platforms, the library compiles for iOS
+  unchanged (iOS 17 lacks `MTLCompileOptions.mathMode`); it has not yet run on a device or
+  simulator, and visionOS has not been built.
+- F16 weight files, which are refused at load today, and a check of BF16 files against llama.cpp
+  (the GEMM kernels read BF16 weights, but no BF16 file has been tested).
+- Fusing the text tower's q, k and v projections into one grouped GEMM, as the vision and audio
+  towers already do, and the per-layer-input gate into fewer dispatches.
 
 ## Author
 
