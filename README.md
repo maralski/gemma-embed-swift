@@ -294,6 +294,35 @@ that crosses the chunk boundary. No recordings and no voices are in the reposito
 Run `swift test -c release` to reproduce (see Tests), or
 `gemma-embed --parity-audio Tests/GemmaEmbedTests/Fixtures/audio`.
 
+### Audio performance
+
+Measured on 2026-10-26 on the same Apple M3 Max as the text numbers, over 40 spoken clips made by
+macOS `say` (`scripts/make_speech_bench.py`, not in the repository: 715 s in all, 3.3 to 85 s
+each, median 8.7 s), under a GPU lock, at a load average of about 4 to 6. Wall time includes WAV
+decoding and the log-mel front end on the CPU.
+
+| Engine | Audio seconds per second, median of 5 rounds | Range |
+|---|---|---|
+| GemmaEmbed, default batching by mel frames | 274.9 | 271.0 to 324.7 |
+| GemmaEmbed, one clip per GPU batch | 235.9 | 225.9 to 271.9 |
+| llama.cpp build 11716, `llama-server --embedding --mmproj`, one clip per request | 153.6 | 148.6 to 160.2 |
+
+`scripts/compare_llamacpp_audio.py models/audio/bench 5` reproduces the table; llama-server's side
+includes HTTP and base64, so the gap slightly overstates the difference between the engines. Over
+the same clips the two engines' vectors agree to min cosine 0.9999994.
+
+Against the first correct implementation, the speed work made audio embedding 1.34 times faster
+in wall time with default batching and 1.29 times with one clip per batch (interleaved A/B runs
+with `scripts/ab_audio.py`, interquartile range 1.30 to 1.35), with the same vectors to within
+3.4e-7. Most of it came from the CPU: the log-mel front end runs an in-place FFT and sums only the
+non-zero taps of each mel filter (about 1.17 times wall on its own, bit-identical features), and
+the next batch's clips are decoded while the GPU runs the current one. On the GPU, attention runs
+one simdgroup per query and head (12 times faster per layer on long clips) and the second
+subsampling convolution is an implicit GEMM on simdgroup matrices (about 4 percent of GPU time).
+Wall time is now bound by the GPU, and three quarters of that is GEMMs already running near 10
+TFLOPS. Tuning GEMM tiles for the audio shapes, split-K, fusing the elementwise passes, larger or
+smaller batches, and double-buffered command encoding each measured within noise.
+
 ### Cross-modal check
 
 Ten sentences spoken by macOS `say` (`scripts/make_speech_samples.sh`, not in the repository) are

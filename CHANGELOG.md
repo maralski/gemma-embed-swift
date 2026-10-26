@@ -20,7 +20,12 @@ Audio embeddings, in the same 768-dimensional space as the text and image embedd
 - The Conformer tower on Metal: fp16-rounded subsampling convolutions with channel LayerNorm,
   clipped linears, half-step SiLU feed-forwards, 12-frame causal attention with sinusoidal
   relative keys and a tanh soft cap, the GLU and causal depthwise convolution module, and the
-  output projections. Written for parity, not speed; a hill climb follows.
+  output projections.
+- Speed: 275 audio seconds per wall second with default batching on 40 spoken clips, against
+  llama-server's 154 on the same clips; 1.34 times the first correct implementation. The log-mel
+  front end uses an in-place FFT and banded mel sums, decoding of the next batch overlaps the GPU,
+  attention runs one simdgroup per query and head, and the 128->32 subsampling convolution is an
+  implicit GEMM. Vectors unchanged.
 - Parity with llama.cpp build 11716: min cosine 0.99998933 over the 29 synthetic fixture clips;
   every graph node of eight dumped chunks within 2.7e-4; ten spoken sentences rank their own
   transcript first with llama-server's ranks.

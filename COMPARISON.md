@@ -19,6 +19,8 @@ build 11716 (commit `797de63b2`, the Homebrew `--HEAD` build).
 | Text throughput, 285 feed posts (private corpus) | 176.4 posts per second | 118.3 posts per second with 8 slots |
 | One 22-token query | 8.3 ms in process | 15.0 ms over local HTTP |
 | Image throughput, 153 feed pictures (private corpus) | 8.46 images per second | 6.04 images per second |
+| Audio vectors (unreleased, next version) | min cosine 0.99998933 against llama-server over 29 fixture clips | the reference |
+| Audio throughput, 40 spoken clips, 715 s (unreleased) | 274.9 audio seconds per second | 153.6 audio seconds per second |
 | Models | EmbeddingGemma 2 only | many model architectures, for generation and embeddings |
 | Platforms | macOS 14 or later on Apple Silicon | macOS, Linux and Windows, on CPU, Metal, CUDA, Vulkan and other backends |
 | Weight files | the Q8_0 files only | Q8_0, BF16, F16, F32 and the quantized GGUF formats |
@@ -126,6 +128,24 @@ that size as approximate. Both engines decode images on the CPU inside the timed
 CPU load from other work moved every figure by a factor of two or more. In the first five
 rounds, llama-server with `-np 8` was no faster than with its default 4 slots (6.27 against 6.72
 images per second).
+
+### Audio
+
+Audio embeddings are on `main` but not yet in a release. Source: README, Audio performance.
+Measured on 2026-10-26 at a load average of about 4 to 6, five alternating rounds, over 40 clips
+spoken by macOS `say` (715 s in all, 3.3 to 85 s each; `scripts/make_speech_bench.py` regenerates
+them, they are not in the repository). Both engines decode WAV on the CPU inside the timed region.
+llama-server receives each clip as base64 in its own request.
+
+| Configuration | Audio seconds per second, median of 5 | Range |
+|---|---|---|
+| GemmaEmbed, default batching by mel frames | 274.9 | 271.0 to 324.7 |
+| GemmaEmbed, one clip per GPU batch | 235.9 | 225.9 to 271.9 |
+| llama-server build 11716, `--embedding --mmproj`, one clip per request | 153.6 | 148.6 to 160.2 |
+
+GemmaEmbed with one clip per batch is 1.54 times faster than llama-server, and 1.79 times with its
+default batching; HTTP and base64 are on llama-server's side of that gap. The vectors agree to min
+cosine 0.9999994 over the same clips. llama-server logs that its audio input is experimental.
 
 ## What llama.cpp does that GemmaEmbed does not
 
