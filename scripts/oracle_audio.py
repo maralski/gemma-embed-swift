@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Usage: python3 -I scripts/oracle_audio.py <fixtures/audio dir> <llama-server base url>
 #        python3 -I scripts/oracle_audio.py --speech <speech dir> <llama-server base url>
 # The server, under the GPU lock, from the package root:

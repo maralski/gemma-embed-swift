@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // The gemma4a audio tower: subsampling convolutions, clipped-linear glue, local attention with
 // relative keys, the GLU and depthwise convolution module. Written for correctness against the
 // CPU reference first; the GEMMs and norms come from GEMM.metal and Elementwise.metal.

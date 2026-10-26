@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Times llama-server embeddings over the same posts gemma-embed --bench uses.
 
 usage: bench_llamacpp.py <posts.json> [--port 8092] [--batch 32] [--runs 3]

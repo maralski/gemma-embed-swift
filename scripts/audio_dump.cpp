@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Dumps llama.cpp's audio path for one sound file: the samples miniaudio decoded and resampled
 // to 16 kHz mono, the token layout mtmd builds around the audio, every audio graph node (index,
 // name, op, shape, sum) with the full data of selected nodes, and the 512-wide output embeddings

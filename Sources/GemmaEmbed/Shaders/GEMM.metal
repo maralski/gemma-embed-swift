@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Y[M,N] = X[M,K] * W[N,K]^T with fp32 activations and quantized or bf16 weights.
 //
 // Every loop over the fragment arrays is fully unrolled so they are indexed with constants and

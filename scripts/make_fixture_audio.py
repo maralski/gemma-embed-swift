@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Writes the audio fixtures in Tests/GemmaEmbedTests/Fixtures/audio from code.
 
     python3 -I scripts/make_fixture_audio.py [<audio dir>]

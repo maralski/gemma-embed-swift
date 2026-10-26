@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// The data conversion `ma_decoder` applies between its backend decoder and a caller that asked

@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Usage: swift scripts/make_fixture_images.swift <all images dir> [<package images dir>]
 //   e.g. swift scripts/make_fixture_images.swift models/fixtures/images Tests/GemmaEmbedTests/Fixtures/images
 // (about three minutes interpreted; swiftc -O builds a binary that takes seconds, with the same output)

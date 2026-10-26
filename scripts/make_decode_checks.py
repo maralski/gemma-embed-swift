@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Writes small WAVs covering every bit depth, channel count and sample rate the audio decoder
 must match, encodes a FLAC, an MP3 and an M4A from them with ffmpeg and an AIFF and a CAF with
 afconvert, and dumps miniaudio's decode of each through scripts/audio_dump.cpp, so the

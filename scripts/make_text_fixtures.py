@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Regenerates the text fixtures in Tests/GemmaEmbedTests/Fixtures from llama.cpp.
 
     scripts/gpulock.py -- python3 -I scripts/make_text_fixtures.py models/embeddinggemma-2-Q8_0.gguf

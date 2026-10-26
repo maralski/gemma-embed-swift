@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 #include <metal_stdlib>
 #include <metal_simdgroup_matrix>
 using namespace metal;

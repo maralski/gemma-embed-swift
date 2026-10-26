@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// The geometry and resampling of llama.cpp's `img_tool` (`tools/mtmd/mtmd-image.cpp`), ported

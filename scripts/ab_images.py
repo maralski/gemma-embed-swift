@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Interleaved A/B image throughput and quality check for two gemma-embed binaries.
 
 Runs A and B alternately under the GPU lock, timing --bench-images over DIR twice per sample:

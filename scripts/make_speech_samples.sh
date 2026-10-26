@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Usage: scripts/make_speech_samples.sh [<out dir>]   (default models/audio/speech)
 # Writes ten spoken sentences as NN.wav (16 kHz 16-bit mono) and NN.txt (the transcript) with macOS
 # `say` and `afconvert`, for the cross-modal tests that check a clip ranks its own transcript first.

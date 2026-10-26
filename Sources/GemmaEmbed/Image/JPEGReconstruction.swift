@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// From coefficients to RGB: stb_image's IDCT, upsamplers and colour conversion.

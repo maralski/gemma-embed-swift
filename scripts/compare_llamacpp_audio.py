@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """GemmaEmbed vs llama-server: audio throughput over a folder of clips, and audio parity.
 
 usage: compare_llamacpp_audio.py AUDIO_DIR [ROUNDS]

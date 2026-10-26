@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// A read-only `MAP_SHARED` memory mapping of a whole file.

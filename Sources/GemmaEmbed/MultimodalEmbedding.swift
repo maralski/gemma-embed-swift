@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// One input to the text tower: text, images and audio in the order they appear. EmbeddingGemma 2

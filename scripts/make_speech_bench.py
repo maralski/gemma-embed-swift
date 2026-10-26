@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Regenerates the spoken audio bench corpus that scripts/ab_audio.py times.
 
 Writes 40 clips, clip-00.wav to clip-39.wav (715 s of 16 kHz mono 16-bit PCM from macOS `say` and

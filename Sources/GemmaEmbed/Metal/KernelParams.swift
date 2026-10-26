@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 // Swift mirrors of the parameter structs in Common.metal. Field order and types must match.

@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// One 30-second (or shorter, final) chunk of audio as log-mel frames: `frames` rows of `melBins`

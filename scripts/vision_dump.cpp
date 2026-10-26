@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Dumps llama.cpp's vision path for one image: the stb-decoded RGB bytes, the token
 // layout mtmd builds around the image, every vision graph node (name, op, shape, sum)
 // and the full data of selected nodes, plus the 512-wide output embeddings.

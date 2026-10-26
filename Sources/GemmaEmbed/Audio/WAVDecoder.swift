@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// PCM samples as decoded from a file: interleaved floats in the range -1 to 1, before any

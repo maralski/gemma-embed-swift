@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Usage: python3 -I scripts/oracle_images.py <fixtures/images dir> <llama-server base url> [1120]
 # The server: llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8093
 # Writes embeddings.jsonl (one row per image in manifest.json: file, kind, prompt_tokens, 768-d L2 vector)

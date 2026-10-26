@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Bidirectional flash-style attention over packed variable-length sequences.
 //
 // Element ownership of a simdgroup_float8x8 on Apple GPUs (measured on M3 Max): lane l holds

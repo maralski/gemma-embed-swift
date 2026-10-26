@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """GemmaEmbed vs llama-server: one short query's latency and image throughput over a folder.
 
 usage: compare_llamacpp.py IMAGE_DIR [ROUNDS]

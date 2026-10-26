@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// A Swift port of stb_image 2.30's JPEG decoder as llama.cpp's libmtmd compiles it (no SIMD

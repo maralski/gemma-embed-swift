@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Writes a JSON description of a GGUF file: metadata (long arrays summarised by a hash) and the tensor directory.
 
 usage: scripts/gguf_dump.py <in.gguf> <out.json>

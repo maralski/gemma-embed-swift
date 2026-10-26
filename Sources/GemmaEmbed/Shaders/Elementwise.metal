@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Token embedding gather, norms, RoPE, activations, residual updates and pooling.
 
 // Floats a simdgroup covers when each of its 32 lanes moves one float4.
