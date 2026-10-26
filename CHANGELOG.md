@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-10-26)
 
 Audio embeddings, in the same 768-dimensional space as the text and image embeddings.
 
@@ -37,6 +37,8 @@ Audio embeddings, in the same 768-dimensional space as the text and image embedd
   `scripts/compare_llamacpp_audio.py`.
 - Internal: `ImageMarkers` is now `SpanMarkers` and frames both modalities; the text workspace owns
   the vectors buffer both towers write into.
+- Every source, shader and script file carries a copyright and SPDX Apache-2.0 header;
+  THIRD_PARTY_NOTICES credits miniaudio for the decoder and resampler ports.
 - Text and image APIs unchanged.
 
 ## 0.3.0 (2026-10-25)

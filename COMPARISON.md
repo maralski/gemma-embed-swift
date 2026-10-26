@@ -12,22 +12,23 @@ build 11716 (commit `797de63b2`, the Homebrew `--HEAD` build).
 
 ## Summary
 
-| | GemmaEmbed 0.3.0 | llama.cpp build 11716 |
+| | GemmaEmbed | llama.cpp build 11716 |
 |---|---|---|
 | Text vectors | min cosine 0.9999988 against llama.cpp over 40 fixtures | the reference |
 | Image vectors | min cosine 0.9999985 against llama-server over 30 fixtures | the reference |
 | Text throughput, 285 feed posts (private corpus) | 176.4 posts per second | 118.3 posts per second with 8 slots |
 | One 22-token query | 8.3 ms in process | 15.0 ms over local HTTP |
 | Image throughput, 153 feed pictures (private corpus) | 8.46 images per second | 6.04 images per second |
-| Audio vectors (unreleased, next version) | min cosine 0.99998933 against llama-server over 29 fixture clips | the reference |
-| Audio throughput, 40 spoken clips, 715 s (unreleased) | 274.9 audio seconds per second | 153.6 audio seconds per second |
+| Audio vectors (0.4.0) | min cosine 0.99998933 against llama-server over 29 fixture clips | the reference |
+| Audio throughput, 40 spoken clips, 715 s (0.4.0) | 274.9 audio seconds per second | 153.6 audio seconds per second |
 | Models | EmbeddingGemma 2 only | many model architectures, for generation and embeddings |
 | Platforms | macOS 14 or later on Apple Silicon | macOS, Linux and Windows, on CPU, Metal, CUDA, Vulkan and other backends |
 | Weight files | the Q8_0 files only | Q8_0, BF16, F16, F32 and the quantized GGUF formats |
 | Interface | Swift API inside your process, and a CLI | HTTP server, command-line tools and a C library |
 | Dependencies | the Apple SDK | a C++ toolchain and CMake to build it |
 
-The query and image rows were measured on a loaded machine. The Speed section gives their
+The text and image rows were measured on 0.3.0 and the audio rows on 0.4.0, which left text and
+image parity unchanged. The query and image rows were measured on a loaded machine. The Speed section gives their
 ranges.
 
 ## Vectors match llama.cpp
@@ -131,7 +132,7 @@ images per second).
 
 ### Audio
 
-Audio embeddings are on `main` but not yet in a release. Source: README, Audio performance.
+Audio embeddings arrived in 0.4.0. Source: README, Audio performance.
 Measured on 2026-10-26 at a load average of about 4 to 6, five alternating rounds, over 40 clips
 spoken by macOS `say` (715 s in all, 3.3 to 85 s each; `scripts/make_speech_bench.py` regenerates
 them, they are not in the repository). Both engines decode WAV on the CPU inside the timed region.
