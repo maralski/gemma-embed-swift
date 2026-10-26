@@ -89,25 +89,35 @@ decode through a Swift port of stb_image's decoder, byte for byte what llama.cpp
 match it too. The preprocessing and the vision tower are documented in
 [Sources/GemmaEmbed/Model/Architecture.md](Sources/GemmaEmbed/Model/Architecture.md).
 
-### Text and images together
+### Text, images and audio together
 
-One input can mix text and images. The model reads each image where it sits among the text, in
-one forward pass, so a caption and its picture embed as one document.
+One input can mix text, images and audio. The model reads each picture and each clip where it
+sits among the text, in one forward pass, so a post with its photo and voice note embeds as one
+document.
 
 ```swift
-let post = MultimodalInput([.text("Our new office, first day:"), .image(.url(photoURL)), .text("More soon.")])
+let mmproj = URL(fileURLWithPath: "mmproj-embeddinggemma-2-Q8_0.gguf")
+let model = try await EmbeddingModel.load(from: textURL, options: LoadOptions(imageEncoder: mmproj, audioEncoder: mmproj))
+let post = MultimodalInput([.text("Our walk on Saturday:"), .image(.url(photoURL)), .text("and what the guide said:"), .audio(.url(voiceNoteURL))])
 let posts = try await model.embed([post, MultimodalInput(text: "Quarterly results", images: [.data(chartPNG)])])
-let query = try await model.embed("office opening", options: EmbedOptions(task: .query))
+let query = try await model.embed("guided hill walk", options: EmbedOptions(task: .query))
 let score = model.similarity(query, posts[0])
 ```
 
 The sequence is the one llama.cpp's `mtmd` builds for EmbeddingGemma 2:
-`[bos] text [<|image>] image rows [<image|>] text ... [eos]`. `MultimodalEmbedOptions.task`
-prefixes the first text, or stands alone before an image that opens the input. `maxTokens`
-counts every row; text is cut from the end until the input fits and images are never cut, so an
-input whose images alone exceed it throws `invalidOptions`. A text-only input embeds exactly as
-`embed(_:)` does and an image-only input with `task: .none` exactly as `embed(images:)` does.
-Inputs with images need the image encoder; text-only inputs do not.
+`[bos] text [<|image>] image rows [<image|>] text [<|audio>] audio rows [<audio|>] ... [eos]`,
+with the parts in the order given. `MultimodalEmbedOptions.task` prefixes the first text, or
+stands alone before a picture or clip that opens the input. `maxTokens` counts every row; text is
+cut from the end until the input fits and pictures and clips are never cut, so an input whose
+pictures and clips alone exceed it throws `invalidOptions`. A text-only input embeds exactly as
+`embed(_:)` does, and an image-only or audio-only input with `task: .none` exactly as
+`embed(images:)` or `embed(audios:)` does. Inputs with images need the image encoder and inputs
+with audio the audio encoder (one mmproj file holds both); text-only inputs need neither. Inputs
+of all three kinds batch together, and each embeds to the same bits alone or in a batch.
+
+The example's shape, a sentence, a fixture photo, a second sentence and a 3 s spoken clip (359
+rows), embeds to cosine 0.9999997 against `llama-server --embedding --mmproj` given the same
+parts, max abs diff 9.3e-5, on 2026-10-26.
 
 ### Image parity
 
