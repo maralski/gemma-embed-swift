@@ -103,7 +103,7 @@ final class MetalForwardTests: XCTestCase {
         defer { env.forward.schedule = savedSchedule }
         for queries in KernelSchedule.attentionQueryCandidates {
             env.forward.schedule.attentionQueries = queries
-            for count in [2, 15, 16, 17, 31, 32, 33, 63, 64, 65] {
+            for count in [2, 13, 15, 16, 17, 31, 32, 33, 63, 64, 65] {
                 let subject = [env.tokenizer.bosId] + Array(body.prefix(count - 2)) + [env.tokenizer.eosId]
                 var packed = PackedBatch()
                 packed.append(Array(body.prefix(19)))
@@ -115,6 +115,25 @@ final class MetalForwardTests: XCTestCase {
                 let single = try env.forward.run(alone)[0]
                 XCTAssertEqual(single.map(\.bitPattern), inBatch.map(\.bitPattern),
                                "\(count) tokens and \(queries) attention queries must match after reusing a larger workspace")
+            }
+        }
+    }
+
+    func testRegisterQ8GemmSmallPackedBatchesMatchFallback() throws {
+        let env = try XCTUnwrap(Self.env)
+        let body = try TestSupport.tokenFixtures().flatMap { $0.tokens.dropFirst().dropLast() }
+        for lengths in [[5, 8], [8, 8], [8, 9]] {
+            var small = PackedBatch()
+            for count in lengths {
+                small.append([env.tokenizer.bosId] + Array(body.prefix(count - 2)) + [env.tokenizer.eosId])
+            }
+            var large = small
+            large.append(Array(body.prefix(97)))
+            let expected = try env.forward.run(large)
+            let actual = try env.forward.run(small)
+            for index in lengths.indices {
+                XCTAssertEqual(actual[index].map(\.bitPattern), expected[index].map(\.bitPattern),
+                               "packed lengths \(lengths), sequence \(index)")
             }
         }
     }

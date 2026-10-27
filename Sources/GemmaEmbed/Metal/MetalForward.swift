@@ -497,6 +497,7 @@ struct Kernels {
     /// `rows` rounded up to the selected tile's row count.
     func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, outRowOffset: Int = 0, rows: Int, outputs: Int, inputs: Int,
               tile: GemmTile? = nil, epilogue: Epilogue = .store) throws {
+        let requestedTile = tile
         let tile = tile ?? forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: inputs)
         let dispatchRows = (rows + tile.rows - 1) / tile.rows * tile.rows
         precondition(outputs % tile.columns == 0 && inputs % tile.depth == 0 && weight.columns == inputs)
@@ -516,13 +517,22 @@ struct Kernels {
         case .gegluQuick(let gate): epilogueName = "gegluquick_"; aux = gate
         }
         precondition(epilogueName.isEmpty || weight.type == .q8_0)
-        _ = try bind("gemm_\(format)_\(epilogueName)\(tile.suffix)")
+        let registerLoads = usesRegisterQ8Gemm(weight: weight, rows: rows, tile: tile, requestedTile: requestedTile, epilogue: epilogue)
+        _ = try bind("gemm_\(format)_\(epilogueName)\(registerLoads ? "register_" : "")\(tile.suffix)")
         encoder.setBuffer(x, offset: 0, index: 0)
         encoder.setBuffer(weights, offset: weight.fileOffset + weightRowOffset * weight.rowBytes, index: 1)
         encoder.setBuffer(out, offset: outRowOffset * outputs * 4, index: 2)
         setBytes(GemmParams(M: UInt32(dispatchRows), N: UInt32(outputs), K: UInt32(inputs), weightRowBytes: UInt32(weight.rowBytes)), index: 3)
         encoder.setBuffer(aux, offset: 0, index: 4)
         dispatch(groups: MTLSize(width: outputs / tile.columns, height: dispatchRows / tile.rows, depth: 1), perGroup: MTLSize(width: tile.threads, height: 1, depth: 1))
+    }
+
+    func usesRegisterQ8Gemm(weight: WeightTensor, rows: Int, tile: GemmTile, requestedTile: GemmTile?, epilogue: Epilogue) -> Bool {
+        guard requestedTile == nil, rows > 0, rows <= 16, weight.type == .q8_0,
+              weights === forward.weightBuffer,
+              tile == GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2) else { return false }
+        if case .gegluQuick = epilogue { return false }
+        return true
     }
 
     func gemm3(_ x: MTLBuffer, weights w: (WeightTensor, WeightTensor, WeightTensor), outs: (MTLBuffer, MTLBuffer, MTLBuffer),
