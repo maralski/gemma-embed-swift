@@ -132,6 +132,51 @@ public struct GemmTile: Sendable, Hashable, Codable {
     var threads: Int { simdgroups * 32 }
 }
 
+enum BatchRegisterGemmTile: CaseIterable, Equatable, Sendable {
+    case rows32Columns32
+    case rows32Columns64
+    case rows32Columns128
+
+    var tile: GemmTile {
+        switch self {
+        case .rows32Columns32: GemmTile(rows: 32, columns: 32, depth: 32, simdgroups: 4)
+        case .rows32Columns64: GemmTile(rows: 32, columns: 64, depth: 32, simdgroups: 4)
+        case .rows32Columns128: GemmTile(rows: 32, columns: 128, depth: 32, simdgroups: 4)
+        }
+    }
+}
+
+enum BatchRegisterGemmPolicy: Equatable, Sendable {
+    case automatic
+    case staged
+    case fixed(BatchRegisterGemmTile)
+
+    func tile(rows: Int, scheduledTile: GemmTile) -> BatchRegisterGemmTile? {
+        if case .automatic = self, scheduledTile != .default { return nil }
+        return switch self {
+        case .automatic:
+            switch rows {
+            case 64...512: .rows32Columns32
+            case 513...2048: .rows32Columns64
+            case 2049...: .rows32Columns128
+            default: nil
+            }
+        case .staged: nil
+        case .fixed(let tile): tile
+        }
+    }
+}
+
+enum TextAttentionOperandLoading: String, CaseIterable, Sendable {
+    case staged = ""
+    case registerKeys = "_register_k"
+
+    func selected(tokenCount: Int, hasVectors: Bool, headDim: Int) -> Self {
+        guard !hasVectors, tokenCount >= 512, headDim == 256 || headDim == 512 else { return .staged }
+        return self
+    }
+}
+
 /// Kernel configuration the forward pass runs with. Autotune may replace the defaults.
 public struct KernelSchedule: Sendable, Hashable, Codable {
     /// Tile for GEMMs larger than every bound in `smallGemmTiles`; autotune picks it.

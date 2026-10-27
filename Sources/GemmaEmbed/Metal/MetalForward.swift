@@ -65,6 +65,8 @@ final class MetalForward: @unchecked Sendable {
     /// One buffer over the whole mapped weight file; tensors are offsets into it.
     let weightBuffer: MTLBuffer
     var schedule: KernelSchedule
+    var batchRegisterGemmPolicy: BatchRegisterGemmPolicy = .automatic
+    var textAttentionOperandLoading: TextAttentionOperandLoading = .registerKeys
     var dispatchType: MTLDispatchType = .concurrent
     #if DEBUG
     var useFusedTextGeglu = true
@@ -367,7 +369,7 @@ final class MetalForward: @unchecked Sendable {
         let gemmRows = vectors == nil ? MetalForward.textGemmRows(N) : paddedRows
         let fusedGeglu = usesFusedTextGeglu(tokenCount: N, hasVectors: vectors != nil)
         let eps = info.normEpsilon
-        let k = Kernels(forward: self, encoder: enc)
+        let k = Kernels(forward: self, encoder: enc, domain: vectors == nil ? .pureText : .general)
 
         try k.embed(table: weights.tokenEmbedding, tokens: ws.tokens, vectors: vectors, out: ws.x0, residual: ws.x, tokenCount: N, paddedRows: paddedRows,
                     scale: config.embeddingScale)
@@ -394,7 +396,8 @@ final class MetalForward: @unchecked Sendable {
             }
             try k.attention(q: ws.q, k: ws.k, v: ws.v, out: ws.attn, work: ws.work, workItems: workItems,
                             heads: heads, kvHeads: kvHeads, headDim: hd,
-                            halfWindow: layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1)
+                            halfWindow: layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1,
+                            operandLoading: textAttentionOperandLoading.selected(tokenCount: N, hasVectors: vectors != nil, headDim: hd))
             if layer.index == stopAfterAttention { return }
             try k.gemm(ws.attn, weight: w.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: qDim)
             try k.rmsNormResidualNorm(ws.x, add: ws.tmp, weight: w.postAttnNorm, out: ws.h, outWeight: w.ffnNorm, rows: N, width: d, eps: eps)
@@ -422,16 +425,23 @@ final class MetalForward: @unchecked Sendable {
 
 /// Encodes one kernel dispatch per call on a compute encoder.
 struct Kernels {
+    enum Domain: Equatable {
+        case general
+        case pureText
+    }
+
     let forward: MetalForward
     let encoder: MTLComputeCommandEncoder
     /// The buffer every weight tensor's `fileOffset` points into: the text model file by
     /// default, the image encoder file for the vision tower.
     let weights: MTLBuffer
+    let domain: Domain
 
-    init(forward: MetalForward, encoder: MTLComputeCommandEncoder, weights: MTLBuffer? = nil) {
+    init(forward: MetalForward, encoder: MTLComputeCommandEncoder, weights: MTLBuffer? = nil, domain: Domain = .general) {
         self.forward = forward
         self.encoder = encoder
         self.weights = weights ?? forward.weightBuffer
+        self.domain = domain
     }
 
     private var context: MetalContext { forward.context }
@@ -514,7 +524,9 @@ struct Kernels {
     func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, outRowOffset: Int = 0, rows: Int, outputs: Int, inputs: Int,
               tile: GemmTile? = nil, epilogue: Epilogue = .store) throws {
         let requestedTile = tile
-        let tile = tile ?? forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: inputs)
+        let batchTile = batchRegisterTile(weight: weight, rows: rows, outputs: outputs, inputs: inputs,
+                                          requestedTile: requestedTile, epilogue: epilogue)
+        let tile = batchTile?.tile ?? tile ?? forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: inputs)
         let dispatchRows = (rows + tile.rows - 1) / tile.rows * tile.rows
         precondition(outputs % tile.columns == 0 && inputs % tile.depth == 0 && weight.columns == inputs)
         let format: String
@@ -534,7 +546,8 @@ struct Kernels {
         }
         precondition(epilogueName.isEmpty || weight.type == .q8_0)
         let registerLoads = usesRegisterQ8Gemm(weight: weight, rows: rows, tile: tile, requestedTile: requestedTile, epilogue: epilogue)
-        _ = try bind("gemm_\(format)_\(epilogueName)\(registerLoads ? "register_" : "")\(tile.suffix)")
+        let loadName = batchTile != nil ? "batch_register_" : (registerLoads ? "register_" : "")
+        _ = try bind("gemm_\(format)_\(epilogueName)\(loadName)\(tile.suffix)")
         encoder.setBuffer(x, offset: 0, index: 0)
         encoder.setBuffer(weights, offset: weight.fileOffset + weightRowOffset * weight.rowBytes, index: 1)
         encoder.setBuffer(out, offset: outRowOffset * outputs * 4, index: 2)
@@ -549,6 +562,16 @@ struct Kernels {
               tile == GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2) else { return false }
         if case .gegluQuick = epilogue { return false }
         return true
+    }
+
+    func batchRegisterTile(weight: WeightTensor, rows: Int, outputs: Int, inputs: Int,
+                           requestedTile: GemmTile?, epilogue: Epilogue) -> BatchRegisterGemmTile? {
+        guard domain == .pureText, weights === forward.weightBuffer, rows >= 64,
+              requestedTile == nil, weight.type == .q8_0,
+              let candidate = forward.batchRegisterGemmPolicy.tile(rows: rows, scheduledTile: forward.schedule.gemmTile),
+              outputs % candidate.tile.columns == 0, inputs % candidate.tile.depth == 0 else { return nil }
+        if case .gegluQuick = epilogue { return nil }
+        return candidate
     }
 
     func gemmGeglu(_ x: MTLBuffer, gate: WeightTensor, up: WeightTensor, out: MTLBuffer,
@@ -644,11 +667,13 @@ struct Kernels {
     }
 
     func attention(q: MTLBuffer, k: MTLBuffer, v: MTLBuffer, out: MTLBuffer, work: MTLBuffer, workItems: Int,
-                   heads: Int, kvHeads: Int, headDim: Int, halfWindow: Int, scale: Float, sliceWidth: Int? = nil) throws {
+                   heads: Int, kvHeads: Int, headDim: Int, halfWindow: Int, scale: Float, sliceWidth: Int? = nil,
+                   operandLoading: TextAttentionOperandLoading = .staged) throws {
         guard workItems > 0 else { return }
         let queries = forward.schedule.attentionQueries(headDim: headDim)
         let sliceWidth = sliceWidth ?? KernelSchedule.attentionSliceWidth(headDim: headDim, threadgroups: workItems * heads)
         let name = [64: "attention_vision", 128: "attention_fwd_ds128", 256: "attention_fwd", 512: "attention_fwd_hd512"][sliceWidth]!
+            + (headDim == 64 ? "" : operandLoading.rawValue)
         precondition(headDim % sliceWidth == 0)
         precondition(headDim != 64 || (kvHeads == heads && halfWindow == 0), "the vision attention kernel has no grouped K/V heads and no window")
         _ = try bind(name)

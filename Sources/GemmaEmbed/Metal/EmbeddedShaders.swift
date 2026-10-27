@@ -30,7 +30,7 @@ inline void stage_tile(threadgroup float* tile, device const float* src, uint st
     }
 }
 
-template <int ATT_DS>
+template <int ATT_DS, bool REGISTER_KEYS = false>
 kernel void attention_kernel(device const float* Q [[buffer(0)]],
                              device const float* K [[buffer(1)]],
                              device const float* V [[buffer(2)]],
@@ -71,8 +71,7 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
     float m = -INFINITY;
     float l = 0.0f;
 
-    // Key range for the whole query block, clipped to the window; every simdgroup walks it
-    // because the K and V tiles are shared.
+    // Key range for the whole query block, clipped to the window.
     uint kStart = 0, kEnd = len;
     if (hw > 0) {
         const int lo = int(w.q0) - int(hw);
@@ -86,15 +85,22 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
         simdgroup_float8x8 s[4];
         for (int j = 0; j < 4; j++) s[j] = simdgroup_float8x8(0.0f);
         for (uint dc = 0; dc < hd; dc += ATT_DC) {
-            threadgroup_barrier(mem_flags::mem_threadgroup);
-            stage_tile(tile, kBase + kb * p.kvStride + dc, p.kvStride, tid, threads);
-            threadgroup_barrier(mem_flags::mem_threadgroup);
+            if (!REGISTER_KEYS) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                stage_tile(tile, kBase + kb * p.kvStride + dc, p.kvStride, tid, threads);
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+            }
             for (int dd = 0; dd < ATT_DC; dd += 8) {
                 simdgroup_float8x8 a;
                 simdgroup_load(a, qBase + dc + dd, p.qStride);
                 for (int j = 0; j < 4; j++) {
                     simdgroup_float8x8 b;
-                    simdgroup_load(b, tile + j * 8 * ATT_LD + dd, ATT_LD, ulong2(0, 0), true);
+                    if (REGISTER_KEYS) {
+                        b.thread_elements()[0] = kBase[(kb + j * 8 + c0) * p.kvStride + dc + dd + r];
+                        b.thread_elements()[1] = kBase[(kb + j * 8 + c0 + 1) * p.kvStride + dc + dd + r];
+                    } else {
+                        simdgroup_load(b, tile + j * 8 * ATT_LD + dd, ATT_LD, ulong2(0, 0), true);
+                    }
                     simdgroup_multiply_accumulate(s[j], a, b, s[j]);
                 }
             }
@@ -179,6 +185,15 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
 ATTENTION_VARIANT("attention_fwd", 256)
 ATTENTION_VARIANT("attention_fwd_hd512", 512)
 ATTENTION_VARIANT("attention_fwd_ds128", 128)
+
+#define ATTENTION_REGISTER_KEYS_VARIANT(NAME, DS) \
+    template [[host_name(NAME)]] kernel void attention_kernel<DS, true>( \
+        device const float*, device const float*, device const float*, device float*, \
+        device const AttentionWork*, constant AttentionParams&, threadgroup float*, uint3, uint, uint, uint);
+
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_register_k", 256)
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_hd512_register_k", 512)
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_ds128_register_k", 128)
 
 constant int VIS_QUERIES = 64;
 constant int VIS_THREADS = VIS_QUERIES / 8 * 32;
@@ -1391,6 +1406,89 @@ kernel void gemm_q8_register_kernel(device const float* X [[buffer(0)]],
 GEMM_Q8_REGISTER_VARIANT("gemm_q8_register_8x16x32s2", EpiStore)
 GEMM_Q8_REGISTER_VARIANT("gemm_q8_geglu_register_8x16x32s2", EpiGeglu)
 GEMM_Q8_REGISTER_VARIANT("gemm_q8_gelutimes_register_8x16x32s2", EpiGeluTimes)
+
+template <typename Epi, int BM, int BN, int SG>
+kernel void gemm_q8_batch_register_kernel(device const float* X [[buffer(0)]],
+                                          device const uchar* W [[buffer(1)]],
+                                          device float* Y [[buffer(2)]],
+                                          constant GemmParams& p [[buffer(3)]],
+                                          device const float* aux [[buffer(4)]],
+                                          uint2 tgid [[threadgroup_position_in_grid]],
+                                          uint tid [[thread_index_in_threadgroup]],
+                                          uint sgid [[simdgroup_index_in_threadgroup]],
+                                          uint lane [[thread_index_in_simdgroup]]) {
+    constexpr int SN = BN / SG, TM = BM / 8, TN = SN / 8;
+    constexpr int OUT_LD = BN + 4, THREADS = SG * 32;
+    const uint fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+    const uint fn = ((lane / 4) & 2) * 2 + (lane % 2) * 2;
+    const uint m0 = tgid.y * BM;
+    const uint n0 = tgid.x * BN + sgid * SN;
+    simdgroup_float8x8 acc[TM][TN];
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < TM; i++)
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++) acc[i][j] = simdgroup_float8x8(0.0f);
+
+    for (uint k0 = 0; k0 < p.K; k0 += 32) {
+        float2 scales[TN];
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++) {
+            device const uchar* w0 = W + (n0 + j * 8 + fn) * p.weightRowBytes + (k0 / 32) * Q8_BLOCK_BYTES;
+            device const uchar* w1 = w0 + p.weightRowBytes;
+            scales[j] = float2(f16_to_float(ushort(w0[0]) | (ushort(w0[1]) << 8)),
+                               f16_to_float(ushort(w1[0]) | (ushort(w1[1]) << 8)));
+        }
+        #pragma clang loop unroll(full)
+        for (uint kk = 0; kk < 32; kk += 8) {
+            simdgroup_float8x8 b[TN];
+            #pragma clang loop unroll(full)
+            for (int j = 0; j < TN; j++) {
+                device const uchar* w0 = W + (n0 + j * 8 + fn) * p.weightRowBytes + (k0 / 32) * Q8_BLOCK_BYTES;
+                device const uchar* w1 = w0 + p.weightRowBytes;
+                b[j].thread_elements()[0] = scales[j].x * float(as_type<char>(w0[2 + kk + fm]));
+                b[j].thread_elements()[1] = scales[j].y * float(as_type<char>(w1[2 + kk + fm]));
+            }
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < TM; i++) {
+                simdgroup_float8x8 a;
+                const float2 x = *(device const float2*)(X + (m0 + i * 8 + fm) * p.K + k0 + kk + fn);
+                a.thread_elements()[0] = x.x;
+                a.thread_elements()[1] = x.y;
+                #pragma clang loop unroll(full)
+                for (int j = 0; j < TN; j++)
+                    simdgroup_multiply_accumulate(acc[i][j], a, b[j], acc[i][j]);
+            }
+        }
+    }
+
+    threadgroup float output[BM * OUT_LD];
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < TM; i++)
+        #pragma clang loop unroll(full)
+        for (int j = 0; j < TN; j++)
+            simdgroup_store(acc[i][j], output + i * 8 * OUT_LD + sgid * SN + j * 8, OUT_LD);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint u = tid; u < BM * BN / 4; u += THREADS) {
+        const uint row = u / (BN / 4), c4 = u % (BN / 4);
+        threadgroup const float* src = output + row * OUT_LD + c4 * 4;
+        const uint index = (m0 + row) * p.N + tgid.x * BN + c4 * 4;
+        const float4 v = float4(src[0], src[1], src[2], src[3]);
+        *(device float4*)(Y + index) = Epi::apply(v, aux, index);
+    }
+}
+
+#define GEMM_Q8_BATCH_REGISTER_VARIANT(NAME, EPI, BM, BN, SG) \
+    template [[host_name(NAME)]] kernel void gemm_q8_batch_register_kernel<EPI, BM, BN, SG>( \
+        device const float*, device const uchar*, device float*, constant GemmParams&, device const float*, uint2, uint, uint, uint);
+
+#define GEMM_Q8_BATCH_REGISTER_TILE(SUFFIX, BM, BN, SG) \
+    GEMM_Q8_BATCH_REGISTER_VARIANT("gemm_q8_batch_register_" SUFFIX, EpiStore, BM, BN, SG) \
+    GEMM_Q8_BATCH_REGISTER_VARIANT("gemm_q8_geglu_batch_register_" SUFFIX, EpiGeglu, BM, BN, SG) \
+    GEMM_Q8_BATCH_REGISTER_VARIANT("gemm_q8_gelutimes_batch_register_" SUFFIX, EpiGeluTimes, BM, BN, SG)
+
+GEMM_Q8_BATCH_REGISTER_TILE("32x32x32s4", 32, 32, 4)
+GEMM_Q8_BATCH_REGISTER_TILE("32x64x32s4", 32, 64, 4)
+GEMM_Q8_BATCH_REGISTER_TILE("32x128x32s4", 32, 128, 4)
 
 kernel void gemm_q8_dual_geglu_register_8x16x32s2(
     device const float* X [[buffer(0)]],
