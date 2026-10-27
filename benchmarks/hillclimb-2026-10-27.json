@@ -1,0 +1,3655 @@
+{
+  "campaigns": {
+    "audio": {
+      "held_unmeasured_configurations": 2,
+      "llama_settings": {
+        "audioFlash": "auto",
+        "audioThreads": 8,
+        "batchRows": 8192,
+        "contextRows": 16384,
+        "languageMode": "batch",
+        "maxSequences": 64,
+        "microbatchRows": 8192,
+        "prepareWorkers": 4,
+        "textBatchThreads": 4,
+        "textFlash": "auto",
+        "textThreads": 4
+      },
+      "measured_configurations": 10,
+      "modality": "audio",
+      "native_source_commit": "b0e1dd83cbb0b3f23f8fc14bf2f7dc0f6de1c05b",
+      "new_audio_changes_retained": 0,
+      "runs": [
+        {
+          "cases": {
+            "primary/batch-long": {
+              "llama_cpp": {
+                "max_seconds": 2.101730291,
+                "median_seconds": 2.086212792,
+                "min_seconds": 2.060544458,
+                "samples_seconds": [
+                  2.093885542,
+                  2.060544458,
+                  2.090348625,
+                  2.08096275,
+                  2.086212792,
+                  2.082305791,
+                  2.101730291
+                ]
+              },
+              "llama_over_native": 1.43007235626831,
+              "minimum_cosine": 0.9999993964307938,
+              "native": {
+                "max_seconds": 1.496072333,
+                "median_seconds": 1.45881625,
+                "min_seconds": 1.43955975,
+                "samples_seconds": [
+                  1.45881625,
+                  1.43955975,
+                  1.451202458,
+                  1.496072333,
+                  1.460474375,
+                  1.441792833,
+                  1.466665167
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/batch-short": {
+              "llama_cpp": {
+                "max_seconds": 0.247756125,
+                "median_seconds": 0.213921208,
+                "min_seconds": 0.204927042,
+                "samples_seconds": [
+                  0.213921208,
+                  0.2112005,
+                  0.207996208,
+                  0.204927042,
+                  0.236628667,
+                  0.219022541,
+                  0.247756125
+                ]
+              },
+              "llama_over_native": 1.9351555577390862,
+              "minimum_cosine": 0.9999996101900299,
+              "native": {
+                "max_seconds": 0.132808541,
+                "median_seconds": 0.110544709,
+                "min_seconds": 0.10593725,
+                "samples_seconds": [
+                  0.110544709,
+                  0.10593725,
+                  0.10964975,
+                  0.107299709,
+                  0.115703166,
+                  0.115150916,
+                  0.132808541
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "primary/singles-long": {
+              "llama_cpp": {
+                "max_seconds": 2.075352584,
+                "median_seconds": 2.061095958,
+                "min_seconds": 2.041314542,
+                "samples_seconds": [
+                  2.056270542,
+                  2.052615583,
+                  2.065010583,
+                  2.0735635,
+                  2.075352584,
+                  2.041314542,
+                  2.061095958
+                ]
+              },
+              "llama_over_native": 1.3469670722251468,
+              "minimum_cosine": 0.9999993636656712,
+              "native": {
+                "max_seconds": 1.594319334,
+                "median_seconds": 1.530175459,
+                "min_seconds": 1.492293083,
+                "samples_seconds": [
+                  1.567714375,
+                  1.492293083,
+                  1.512081125,
+                  1.589060375,
+                  1.530175459,
+                  1.514800417,
+                  1.594319334
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/singles-short": {
+              "llama_cpp": {
+                "max_seconds": 0.302164,
+                "median_seconds": 0.293622042,
+                "min_seconds": 0.28859975,
+                "samples_seconds": [
+                  0.289760833,
+                  0.28859975,
+                  0.300327166,
+                  0.292632208,
+                  0.294669667,
+                  0.293622042,
+                  0.302164
+                ]
+              },
+              "llama_over_native": 1.4811473952707015,
+              "minimum_cosine": 0.999999549345082,
+              "native": {
+                "max_seconds": 0.215015666,
+                "median_seconds": 0.198239583,
+                "min_seconds": 0.197117875,
+                "samples_seconds": [
+                  0.201044125,
+                  0.197316084,
+                  0.215015666,
+                  0.198239583,
+                  0.197117875,
+                  0.197226375,
+                  0.200546625
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-1"
+        },
+        {
+          "cases": {
+            "primary/batch-long": {
+              "llama_cpp": {
+                "max_seconds": 2.44652125,
+                "median_seconds": 2.379114792,
+                "min_seconds": 2.302265834,
+                "samples_seconds": [
+                  2.316508875,
+                  2.302265834,
+                  2.434986958,
+                  2.44652125,
+                  2.379114792,
+                  2.372592209,
+                  2.436865167
+                ]
+              },
+              "llama_over_native": 1.369622131196734,
+              "minimum_cosine": 0.9999993964307938,
+              "native": {
+                "max_seconds": 1.855145166,
+                "median_seconds": 1.73705925,
+                "min_seconds": 1.709923083,
+                "samples_seconds": [
+                  1.73705925,
+                  1.855145166,
+                  1.709923083,
+                  1.842179583,
+                  1.723607375,
+                  1.729137667,
+                  1.751200583
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/batch-short": {
+              "llama_cpp": {
+                "max_seconds": 0.210274791,
+                "median_seconds": 0.208677708,
+                "min_seconds": 0.207142292,
+                "samples_seconds": [
+                  0.208242875,
+                  0.207142292,
+                  0.20929725,
+                  0.208677708,
+                  0.209367209,
+                  0.207833584,
+                  0.210274791
+                ]
+              },
+              "llama_over_native": 2.0003918195959587,
+              "minimum_cosine": 0.9999996101900299,
+              "native": {
+                "max_seconds": 0.106861459,
+                "median_seconds": 0.104318417,
+                "min_seconds": 0.102073208,
+                "samples_seconds": [
+                  0.106861459,
+                  0.103584292,
+                  0.105190166,
+                  0.104318417,
+                  0.103729417,
+                  0.102073208,
+                  0.104430625
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "primary/singles-long": {
+              "llama_cpp": {
+                "max_seconds": 2.234885167,
+                "median_seconds": 2.177745292,
+                "min_seconds": 2.124864125,
+                "samples_seconds": [
+                  2.177745292,
+                  2.234885167,
+                  2.124864125,
+                  2.209407792,
+                  2.183091208,
+                  2.175412292,
+                  2.140015625
+                ]
+              },
+              "llama_over_native": 1.327626933434248,
+              "minimum_cosine": 0.9999993636656712,
+              "native": {
+                "max_seconds": 1.728823167,
+                "median_seconds": 1.64032925,
+                "min_seconds": 1.602808625,
+                "samples_seconds": [
+                  1.728823167,
+                  1.64032925,
+                  1.624279875,
+                  1.649968,
+                  1.602808625,
+                  1.673759084,
+                  1.61916775
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/singles-short": {
+              "llama_cpp": {
+                "max_seconds": 0.337084166,
+                "median_seconds": 0.320030083,
+                "min_seconds": 0.297157291,
+                "samples_seconds": [
+                  0.320030083,
+                  0.297157291,
+                  0.329943875,
+                  0.298034958,
+                  0.331675708,
+                  0.302407,
+                  0.337084166
+                ]
+              },
+              "llama_over_native": 1.29002752668028,
+              "minimum_cosine": 0.999999549345082,
+              "native": {
+                "max_seconds": 0.256880625,
+                "median_seconds": 0.248080042,
+                "min_seconds": 0.21224625,
+                "samples_seconds": [
+                  0.253417542,
+                  0.214396833,
+                  0.255018542,
+                  0.214617625,
+                  0.248080042,
+                  0.21224625,
+                  0.256880625
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-2"
+        },
+        {
+          "cases": {
+            "primary/batch-long": {
+              "llama_cpp": {
+                "max_seconds": 2.538105209,
+                "median_seconds": 2.514832209,
+                "min_seconds": 2.403590458,
+                "samples_seconds": [
+                  2.538105209,
+                  2.519947042,
+                  2.514832209,
+                  2.403590458,
+                  2.518046167,
+                  2.501916833,
+                  2.449649042
+                ]
+              },
+              "llama_over_native": 1.3665479396896452,
+              "minimum_cosine": 0.9999993964307938,
+              "native": {
+                "max_seconds": 1.897427209,
+                "median_seconds": 1.840281,
+                "min_seconds": 1.80050675,
+                "samples_seconds": [
+                  1.840281,
+                  1.841111584,
+                  1.804064167,
+                  1.891948792,
+                  1.819919125,
+                  1.80050675,
+                  1.897427209
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/batch-short": {
+              "llama_cpp": {
+                "max_seconds": 0.263135167,
+                "median_seconds": 0.228755167,
+                "min_seconds": 0.216426917,
+                "samples_seconds": [
+                  0.228755167,
+                  0.217377208,
+                  0.263135167,
+                  0.216426917,
+                  0.246099417,
+                  0.225364334,
+                  0.249826792
+                ]
+              },
+              "llama_over_native": 1.6963890702923332,
+              "minimum_cosine": 0.9999996101900299,
+              "native": {
+                "max_seconds": 0.204580875,
+                "median_seconds": 0.134848291,
+                "min_seconds": 0.115614875,
+                "samples_seconds": [
+                  0.118273458,
+                  0.1393185,
+                  0.204580875,
+                  0.115614875,
+                  0.131488917,
+                  0.134848291,
+                  0.157684416
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "primary/singles-long": {
+              "llama_cpp": {
+                "max_seconds": 2.877831333,
+                "median_seconds": 2.676838291,
+                "min_seconds": 2.582432042,
+                "samples_seconds": [
+                  2.650536125,
+                  2.877831333,
+                  2.6962325,
+                  2.693029125,
+                  2.614989958,
+                  2.676838291,
+                  2.582432042
+                ]
+              },
+              "llama_over_native": 1.3103366921982242,
+              "minimum_cosine": 0.9999993636656712,
+              "native": {
+                "max_seconds": 2.190288083,
+                "median_seconds": 2.042862958,
+                "min_seconds": 1.964340042,
+                "samples_seconds": [
+                  2.151403208,
+                  2.190288083,
+                  2.046735584,
+                  1.964340042,
+                  2.042862958,
+                  2.028783125,
+                  1.965147125
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "primary/singles-short": {
+              "llama_cpp": {
+                "max_seconds": 0.338530584,
+                "median_seconds": 0.298934834,
+                "min_seconds": 0.294988125,
+                "samples_seconds": [
+                  0.294988125,
+                  0.296281208,
+                  0.31378575,
+                  0.295336875,
+                  0.308145292,
+                  0.298934834,
+                  0.338530584
+                ]
+              },
+              "llama_over_native": 1.3920572239937852,
+              "minimum_cosine": 0.999999549345082,
+              "native": {
+                "max_seconds": 0.3361565,
+                "median_seconds": 0.214743208,
+                "min_seconds": 0.205787625,
+                "samples_seconds": [
+                  0.212867,
+                  0.265219167,
+                  0.3361565,
+                  0.205787625,
+                  0.214743208,
+                  0.212433208,
+                  0.245714875
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-3"
+        }
+      ],
+      "workloads": [
+        {
+          "case": "primary/singles-short",
+          "clips": 8,
+          "max_clip_seconds": 4.961125,
+          "min_clip_seconds": 3.398125,
+          "public_calls": 8
+        },
+        {
+          "case": "primary/batch-short",
+          "clips": 8,
+          "max_clip_seconds": 4.961125,
+          "min_clip_seconds": 3.398125,
+          "public_calls": 1
+        },
+        {
+          "case": "primary/singles-long",
+          "clips": 8,
+          "max_clip_seconds": 85.1098125,
+          "min_clip_seconds": 27.9574375,
+          "public_calls": 8
+        },
+        {
+          "case": "primary/batch-long",
+          "clips": 8,
+          "max_clip_seconds": 85.1098125,
+          "min_clip_seconds": 27.9574375,
+          "public_calls": 1
+        }
+      ]
+    },
+    "image": {
+      "llama_settings_by_case": {
+        "batch-1120": {
+          "batchRows": 2048,
+          "contextRows": 4096,
+          "maxSequences": 8,
+          "microbatchRows": 2048,
+          "prepareWorkers": 1,
+          "textBatchThreads": 12,
+          "textFlash": "auto",
+          "textThreads": 12,
+          "visionBatchTokens": 1024,
+          "visionFlash": "auto",
+          "visionMode": "compatible",
+          "visionThreads": 8
+        },
+        "batch-256": {
+          "batchRows": 8192,
+          "contextRows": 16384,
+          "maxSequences": 64,
+          "microbatchRows": 8192,
+          "prepareWorkers": 1,
+          "textBatchThreads": 12,
+          "textFlash": "auto",
+          "textThreads": 12,
+          "visionBatchTokens": 1024,
+          "visionFlash": "auto",
+          "visionMode": "serial",
+          "visionThreads": 8
+        },
+        "singles-1120": {
+          "batchRows": 8192,
+          "contextRows": 16384,
+          "maxSequences": 64,
+          "microbatchRows": 8192,
+          "prepareWorkers": 1,
+          "textBatchThreads": 8,
+          "textFlash": "auto",
+          "textThreads": 8,
+          "visionBatchTokens": 1024,
+          "visionFlash": "auto",
+          "visionMode": "compatible",
+          "visionThreads": 4
+        },
+        "singles-256": {
+          "batchRows": 8192,
+          "contextRows": 16384,
+          "maxSequences": 64,
+          "microbatchRows": 8192,
+          "prepareWorkers": 1,
+          "textBatchThreads": 12,
+          "textFlash": "off",
+          "textThreads": 12,
+          "visionBatchTokens": 1024,
+          "visionFlash": "auto",
+          "visionMode": "compatible",
+          "visionThreads": 8
+        }
+      },
+      "measured_configurations": 8,
+      "modality": "image",
+      "native_source_commit": "b0e1dd83cbb0b3f23f8fc14bf2f7dc0f6de1c05b",
+      "new_image_changes_retained": 0,
+      "runs": [
+        {
+          "cases": {
+            "batch-1120": {
+              "llama_cpp": {
+                "max_seconds": 2.837292959,
+                "median_seconds": 2.651111625,
+                "min_seconds": 2.608893666,
+                "samples_seconds": [
+                  2.608893666,
+                  2.622869417,
+                  2.641809583,
+                  2.651111625,
+                  2.837292959,
+                  2.788970375,
+                  2.688199333
+                ]
+              },
+              "llama_over_native": 1.2340058202834163,
+              "minimum_cosine": 0.9999995692712386,
+              "native": {
+                "max_seconds": 2.18759325,
+                "median_seconds": 2.148378542,
+                "min_seconds": 2.1095625,
+                "samples_seconds": [
+                  2.1095625,
+                  2.148378542,
+                  2.118177666,
+                  2.175023042,
+                  2.148333709,
+                  2.177477583,
+                  2.18759325
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "batch-256": {
+              "llama_cpp": {
+                "max_seconds": 1.201113916,
+                "median_seconds": 1.136580542,
+                "min_seconds": 1.116115583,
+                "samples_seconds": [
+                  1.123643958,
+                  1.156377833,
+                  1.136182792,
+                  1.116115583,
+                  1.159420292,
+                  1.136580542,
+                  1.201113916
+                ]
+              },
+              "llama_over_native": 1.1785373557683707,
+              "minimum_cosine": 0.9999995568243146,
+              "native": {
+                "max_seconds": 1.034338458,
+                "median_seconds": 0.96439925,
+                "min_seconds": 0.927876167,
+                "samples_seconds": [
+                  0.949033625,
+                  0.99980275,
+                  0.927876167,
+                  1.034338458,
+                  0.96439925,
+                  0.947249833,
+                  1.028129667
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-1120": {
+              "llama_cpp": {
+                "max_seconds": 2.776445917,
+                "median_seconds": 2.629181458,
+                "min_seconds": 2.60463525,
+                "samples_seconds": [
+                  2.6281695,
+                  2.652982834,
+                  2.629181458,
+                  2.776445917,
+                  2.688146792,
+                  2.607423625,
+                  2.60463525
+                ]
+              },
+              "llama_over_native": 1.2392639783984716,
+              "minimum_cosine": 0.9999995566988105,
+              "native": {
+                "max_seconds": 2.217131458,
+                "median_seconds": 2.121566917,
+                "min_seconds": 2.09331475,
+                "samples_seconds": [
+                  2.152933375,
+                  2.110326917,
+                  2.146332125,
+                  2.217131458,
+                  2.121566917,
+                  2.09331475,
+                  2.106993667
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-256": {
+              "llama_cpp": {
+                "max_seconds": 1.281716292,
+                "median_seconds": 1.2173785,
+                "min_seconds": 1.181605,
+                "samples_seconds": [
+                  1.221526042,
+                  1.207941416,
+                  1.220803833,
+                  1.281716292,
+                  1.2173785,
+                  1.182603791,
+                  1.181605
+                ]
+              },
+              "llama_over_native": 1.2022721511996257,
+              "minimum_cosine": 0.9999995522067475,
+              "native": {
+                "max_seconds": 1.077051959,
+                "median_seconds": 1.012564833,
+                "min_seconds": 0.978636625,
+                "samples_seconds": [
+                  1.077051959,
+                  1.012115292,
+                  1.025405083,
+                  1.021430125,
+                  1.010680792,
+                  1.012564833,
+                  0.978636625
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-1"
+        },
+        {
+          "cases": {
+            "batch-1120": {
+              "llama_cpp": {
+                "max_seconds": 6.817765083,
+                "median_seconds": 4.979528166,
+                "min_seconds": 4.063718291,
+                "samples_seconds": [
+                  4.063718291,
+                  4.473928375,
+                  4.733874584,
+                  4.979528166,
+                  5.355106625,
+                  5.376411458,
+                  6.817765083
+                ]
+              },
+              "llama_over_native": 1.2427319210996348,
+              "minimum_cosine": 0.9999995692712386,
+              "native": {
+                "max_seconds": 4.989992958,
+                "median_seconds": 4.006920625,
+                "min_seconds": 3.240343375,
+                "samples_seconds": [
+                  3.240343375,
+                  4.076813667,
+                  3.636654959,
+                  4.006920625,
+                  3.841761666,
+                  4.7734625,
+                  4.989992958
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "batch-256": {
+              "llama_cpp": {
+                "max_seconds": 1.346980708,
+                "median_seconds": 1.201474042,
+                "min_seconds": 1.123523667,
+                "samples_seconds": [
+                  1.123523667,
+                  1.162306917,
+                  1.201474042,
+                  1.158150459,
+                  1.346980708,
+                  1.272579625,
+                  1.239627625
+                ]
+              },
+              "llama_over_native": 1.2169642222149604,
+              "minimum_cosine": 0.9999995568243146,
+              "native": {
+                "max_seconds": 1.088270958,
+                "median_seconds": 0.987271458,
+                "min_seconds": 0.935887458,
+                "samples_seconds": [
+                  0.935887458,
+                  1.016434458,
+                  0.988437625,
+                  0.987271458,
+                  0.944135875,
+                  0.941230375,
+                  1.088270958
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-1120": {
+              "llama_cpp": {
+                "max_seconds": 3.590501542,
+                "median_seconds": 3.360494542,
+                "min_seconds": 2.97082125,
+                "samples_seconds": [
+                  2.97082125,
+                  3.131971625,
+                  3.430011583,
+                  3.27880275,
+                  3.360494542,
+                  3.541388458,
+                  3.590501542
+                ]
+              },
+              "llama_over_native": 1.2729105413579105,
+              "minimum_cosine": 0.9999995566988105,
+              "native": {
+                "max_seconds": 2.891207542,
+                "median_seconds": 2.640008416,
+                "min_seconds": 2.4735445,
+                "samples_seconds": [
+                  2.4735445,
+                  2.588034875,
+                  2.527778167,
+                  2.640008416,
+                  2.74214775,
+                  2.76305275,
+                  2.891207542
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-256": {
+              "llama_cpp": {
+                "max_seconds": 3.428575291,
+                "median_seconds": 2.810030875,
+                "min_seconds": 2.714095958,
+                "samples_seconds": [
+                  3.038670709,
+                  3.428575291,
+                  3.000620917,
+                  2.739008625,
+                  2.726503792,
+                  2.810030875,
+                  2.714095958
+                ]
+              },
+              "llama_over_native": 1.25191460135301,
+              "minimum_cosine": 0.9999995522067475,
+              "native": {
+                "max_seconds": 2.424342375,
+                "median_seconds": 2.244586709,
+                "min_seconds": 2.152338167,
+                "samples_seconds": [
+                  2.152637792,
+                  2.424342375,
+                  2.182732666,
+                  2.396834,
+                  2.244586709,
+                  2.152338167,
+                  2.280925084
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-2"
+        },
+        {
+          "cases": {
+            "batch-1120": {
+              "llama_cpp": {
+                "max_seconds": 3.927475333,
+                "median_seconds": 3.777334083,
+                "min_seconds": 3.681295917,
+                "samples_seconds": [
+                  3.777334083,
+                  3.792350583,
+                  3.758845542,
+                  3.927475333,
+                  3.839152584,
+                  3.700202208,
+                  3.681295917
+                ]
+              },
+              "llama_over_native": 1.254010100162958,
+              "minimum_cosine": 0.9999995692712386,
+              "native": {
+                "max_seconds": 3.337163083,
+                "median_seconds": 3.012203875,
+                "min_seconds": 2.862228959,
+                "samples_seconds": [
+                  3.337163083,
+                  3.0943695,
+                  3.21005925,
+                  3.012203875,
+                  2.862228959,
+                  2.928538625,
+                  2.910706625
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "batch-256": {
+              "llama_cpp": {
+                "max_seconds": 1.580700541,
+                "median_seconds": 1.470133291,
+                "min_seconds": 1.43539175,
+                "samples_seconds": [
+                  1.448108292,
+                  1.482021625,
+                  1.47701875,
+                  1.438640667,
+                  1.43539175,
+                  1.580700541,
+                  1.470133291
+                ]
+              },
+              "llama_over_native": 1.1699855417541647,
+              "minimum_cosine": 0.9999995568243146,
+              "native": {
+                "max_seconds": 1.321152417,
+                "median_seconds": 1.256539708,
+                "min_seconds": 1.20068425,
+                "samples_seconds": [
+                  1.201039667,
+                  1.20068425,
+                  1.243662875,
+                  1.266973125,
+                  1.303940291,
+                  1.256539708,
+                  1.321152417
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-1120": {
+              "llama_cpp": {
+                "max_seconds": 5.155556417,
+                "median_seconds": 4.449869958,
+                "min_seconds": 4.193196667,
+                "samples_seconds": [
+                  5.155556417,
+                  4.802683958,
+                  4.449869958,
+                  4.4942395,
+                  4.270007417,
+                  4.230166708,
+                  4.193196667
+                ]
+              },
+              "llama_over_native": 1.2473526441859881,
+              "minimum_cosine": 0.9999995566988105,
+              "native": {
+                "max_seconds": 4.327051,
+                "median_seconds": 3.567451417,
+                "min_seconds": 3.3175635,
+                "samples_seconds": [
+                  4.096036583,
+                  3.969246334,
+                  4.327051,
+                  3.541475375,
+                  3.567451417,
+                  3.358222875,
+                  3.3175635
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "singles-256": {
+              "llama_cpp": {
+                "max_seconds": 1.546176292,
+                "median_seconds": 1.51396625,
+                "min_seconds": 1.48730825,
+                "samples_seconds": [
+                  1.498462167,
+                  1.5145435,
+                  1.51396625,
+                  1.530146417,
+                  1.50324575,
+                  1.48730825,
+                  1.546176292
+                ]
+              },
+              "llama_over_native": 1.1934662186479594,
+              "minimum_cosine": 0.9999995522067475,
+              "native": {
+                "max_seconds": 1.34035775,
+                "median_seconds": 1.268545541,
+                "min_seconds": 1.227797375,
+                "samples_seconds": [
+                  1.268545541,
+                  1.227797375,
+                  1.266274583,
+                  1.34035775,
+                  1.330920209,
+                  1.332826,
+                  1.262840625
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "final-001-3"
+        }
+      ]
+    },
+    "merged_text": {
+      "llama_settings": {
+        "llama_batch": 2048,
+        "llama_context": 8192,
+        "llama_gpu_layers": 999,
+        "llama_kv_unified": true,
+        "llama_pooling": "mean",
+        "llama_sequences": 64,
+        "llama_threads": 12,
+        "llama_threads_batch": 12,
+        "llama_ubatch": 2048
+      },
+      "merged_main_commit": "b0e1dd83cbb0b3f23f8fc14bf2f7dc0f6de1c05b",
+      "modality": "text",
+      "native_source_commit": "69855d67a50be2642ee03be4a22ecdde4172570e",
+      "runs": [
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.623826708,
+                "median_seconds": 0.581176208,
+                "min_seconds": 0.563403792,
+                "samples_seconds": [
+                  0.623826708,
+                  0.591808166,
+                  0.567935416,
+                  0.581176208,
+                  0.606263459,
+                  0.565977541,
+                  0.563403792
+                ]
+              },
+              "llama_over_native": 1.1478945895176687,
+              "native": {
+                "max_seconds": 0.538781334,
+                "median_seconds": 0.506297541,
+                "min_seconds": 0.474259042,
+                "samples_seconds": [
+                  0.538781334,
+                  0.506297541,
+                  0.482893875,
+                  0.510284333,
+                  0.474259042,
+                  0.521912291,
+                  0.49912925
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.568072542,
+                "median_seconds": 0.512452458,
+                "min_seconds": 0.494552834,
+                "samples_seconds": [
+                  0.512452458,
+                  0.494552834,
+                  0.502572625,
+                  0.524907667,
+                  0.568072542,
+                  0.511160167,
+                  0.528487417
+                ]
+              },
+              "llama_over_native": 1.2564794115943354,
+              "native": {
+                "max_seconds": 0.5026065,
+                "median_seconds": 0.407847875,
+                "min_seconds": 0.349382833,
+                "samples_seconds": [
+                  0.3830575,
+                  0.349382833,
+                  0.363659,
+                  0.443397958,
+                  0.5026065,
+                  0.407847875,
+                  0.4624265
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.106511083,
+                "median_seconds": 0.099602084,
+                "min_seconds": 0.099043041,
+                "samples_seconds": [
+                  0.100623125,
+                  0.099075042,
+                  0.099047166,
+                  0.099602084,
+                  0.106511083,
+                  0.099043041,
+                  0.10137225
+                ]
+              },
+              "llama_over_native": 1.3659940804321629,
+              "native": {
+                "max_seconds": 0.073700292,
+                "median_seconds": 0.072915458,
+                "min_seconds": 0.071595208,
+                "samples_seconds": [
+                  0.073700292,
+                  0.072915458,
+                  0.073564792,
+                  0.073454833,
+                  0.072815708,
+                  0.071595208,
+                  0.072438458
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.110651833,
+                "median_seconds": 0.095429375,
+                "min_seconds": 0.094967542,
+                "samples_seconds": [
+                  0.095044458,
+                  0.095429375,
+                  0.094967542,
+                  0.095046833,
+                  0.110651833,
+                  0.098867458,
+                  0.097196959
+                ]
+              },
+              "llama_over_native": 1.3905379646744798,
+              "native": {
+                "max_seconds": 0.069743417,
+                "median_seconds": 0.068627666,
+                "min_seconds": 0.0673715,
+                "samples_seconds": [
+                  0.067466,
+                  0.067728125,
+                  0.0673715,
+                  0.069335459,
+                  0.069743417,
+                  0.068627666,
+                  0.068950542
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.014030959,
+                "median_seconds": 0.012661791,
+                "min_seconds": 0.012279417,
+                "samples_seconds": [
+                  0.012279417,
+                  0.012786959,
+                  0.012739042,
+                  0.012661791,
+                  0.012500333,
+                  0.012410167,
+                  0.014030959
+                ]
+              },
+              "llama_over_native": 2.081989001549596,
+              "native": {
+                "max_seconds": 0.006986125,
+                "median_seconds": 0.006081584,
+                "min_seconds": 0.005976167,
+                "samples_seconds": [
+                  0.006081584,
+                  0.006522166,
+                  0.006032417,
+                  0.005976167,
+                  0.006521125,
+                  0.006000209,
+                  0.006986125
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.012654416,
+                "median_seconds": 0.012193708,
+                "min_seconds": 0.012104542,
+                "samples_seconds": [
+                  0.012139667,
+                  0.012193708,
+                  0.012104542,
+                  0.012654416,
+                  0.012249666,
+                  0.012269416,
+                  0.012111709
+                ]
+              },
+              "llama_over_native": 1.9726131197929302,
+              "native": {
+                "max_seconds": 0.006660334,
+                "median_seconds": 0.0061815,
+                "min_seconds": 0.005748,
+                "samples_seconds": [
+                  0.005748,
+                  0.006660334,
+                  0.0061815,
+                  0.006441458,
+                  0.006477458,
+                  0.006116667,
+                  0.005884083
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.092516375,
+                "median_seconds": 0.0919485,
+                "min_seconds": 0.091702833,
+                "samples_seconds": [
+                  0.092403667,
+                  0.0919485,
+                  0.091702833,
+                  0.09188625,
+                  0.092414708,
+                  0.092516375,
+                  0.091940125
+                ]
+              },
+              "llama_over_native": 1.4032681281964263,
+              "native": {
+                "max_seconds": 0.066264833,
+                "median_seconds": 0.065524541,
+                "min_seconds": 0.0650625,
+                "samples_seconds": [
+                  0.065971084,
+                  0.065199042,
+                  0.065135166,
+                  0.065858208,
+                  0.065524541,
+                  0.0650625,
+                  0.066264833
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.0903975,
+                "median_seconds": 0.088255875,
+                "min_seconds": 0.087479291,
+                "samples_seconds": [
+                  0.0903975,
+                  0.088416625,
+                  0.087831458,
+                  0.088255875,
+                  0.087983458,
+                  0.087479291,
+                  0.08876075
+                ]
+              },
+              "llama_over_native": 1.4607254534021696,
+              "native": {
+                "max_seconds": 0.060811541,
+                "median_seconds": 0.060419208,
+                "min_seconds": 0.060261042,
+                "samples_seconds": [
+                  0.060811541,
+                  0.060261042,
+                  0.060419208,
+                  0.060270792,
+                  0.060402917,
+                  0.060606834,
+                  0.060552542
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.027775958,
+                "median_seconds": 0.026217917,
+                "min_seconds": 0.025700291,
+                "samples_seconds": [
+                  0.027166,
+                  0.027775958,
+                  0.026175084,
+                  0.025700291,
+                  0.026185875,
+                  0.026217917,
+                  0.026620541
+                ]
+              },
+              "llama_over_native": 1.3177150252556982,
+              "native": {
+                "max_seconds": 0.020431291,
+                "median_seconds": 0.0198965,
+                "min_seconds": 0.019426708,
+                "samples_seconds": [
+                  0.020431291,
+                  0.020402709,
+                  0.0198965,
+                  0.019933792,
+                  0.019632458,
+                  0.019542167,
+                  0.019426708
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.030741042,
+                "median_seconds": 0.025926875,
+                "min_seconds": 0.025049667,
+                "samples_seconds": [
+                  0.028645291,
+                  0.029243833,
+                  0.030741042,
+                  0.025926875,
+                  0.025777083,
+                  0.025049667,
+                  0.025814209
+                ]
+              },
+              "llama_over_native": 1.4144374680274323,
+              "native": {
+                "max_seconds": 0.019680458,
+                "median_seconds": 0.018330167,
+                "min_seconds": 0.018041458,
+                "samples_seconds": [
+                  0.019680458,
+                  0.018605667,
+                  0.018330167,
+                  0.01821925,
+                  0.018393833,
+                  0.018041458,
+                  0.018148458
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.153615125,
+                "median_seconds": 0.135878875,
+                "min_seconds": 0.082133625,
+                "samples_seconds": [
+                  0.122147708,
+                  0.118493833,
+                  0.135878875,
+                  0.148131416,
+                  0.148257875,
+                  0.153615125,
+                  0.082133625
+                ]
+              },
+              "llama_over_native": 1.527638649982574,
+              "native": {
+                "max_seconds": 0.104602584,
+                "median_seconds": 0.088947,
+                "min_seconds": 0.075180959,
+                "samples_seconds": [
+                  0.088947,
+                  0.076507667,
+                  0.075180959,
+                  0.100407833,
+                  0.09817625,
+                  0.104602584,
+                  0.080627375
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.148227875,
+                "median_seconds": 0.080822125,
+                "min_seconds": 0.076097167,
+                "samples_seconds": [
+                  0.080913875,
+                  0.080822125,
+                  0.076097167,
+                  0.08023275,
+                  0.078945416,
+                  0.10117275,
+                  0.148227875
+                ]
+              },
+              "llama_over_native": 1.5484389331532422,
+              "native": {
+                "max_seconds": 0.081196584,
+                "median_seconds": 0.052195875,
+                "min_seconds": 0.049348333,
+                "samples_seconds": [
+                  0.049696041,
+                  0.060787541,
+                  0.052195875,
+                  0.049348333,
+                  0.049724042,
+                  0.074617375,
+                  0.081196584
+                ]
+              },
+              "reaches_1_50": true
+            }
+          },
+          "name": "frozen-final-1"
+        },
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.728287416,
+                "median_seconds": 0.620833,
+                "min_seconds": 0.579297291,
+                "samples_seconds": [
+                  0.587791666,
+                  0.728287416,
+                  0.631637209,
+                  0.620833,
+                  0.579297291,
+                  0.636913708,
+                  0.593428333
+                ]
+              },
+              "llama_over_native": 1.1604215976355692,
+              "native": {
+                "max_seconds": 0.597257667,
+                "median_seconds": 0.535006416,
+                "min_seconds": 0.512516833,
+                "samples_seconds": [
+                  0.5223915,
+                  0.562391792,
+                  0.560658708,
+                  0.535006416,
+                  0.512516833,
+                  0.597257667,
+                  0.533251875
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.635557958,
+                "median_seconds": 0.602077708,
+                "min_seconds": 0.536377042,
+                "samples_seconds": [
+                  0.602830375,
+                  0.536377042,
+                  0.583484375,
+                  0.602077708,
+                  0.574399834,
+                  0.635557958,
+                  0.623798042
+                ]
+              },
+              "llama_over_native": 1.1924007296075292,
+              "native": {
+                "max_seconds": 0.516252583,
+                "median_seconds": 0.504929,
+                "min_seconds": 0.483659625,
+                "samples_seconds": [
+                  0.513335666,
+                  0.516252583,
+                  0.483659625,
+                  0.504929,
+                  0.505068375,
+                  0.489500792,
+                  0.49004125
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.124806875,
+                "median_seconds": 0.118897167,
+                "min_seconds": 0.111199709,
+                "samples_seconds": [
+                  0.11792375,
+                  0.117551,
+                  0.124806875,
+                  0.123385916,
+                  0.118897167,
+                  0.111199709,
+                  0.121535208
+                ]
+              },
+              "llama_over_native": 1.371222576697022,
+              "native": {
+                "max_seconds": 0.096511667,
+                "median_seconds": 0.086708875,
+                "min_seconds": 0.0784005,
+                "samples_seconds": [
+                  0.086708875,
+                  0.086701083,
+                  0.095101625,
+                  0.091577458,
+                  0.096511667,
+                  0.0784005,
+                  0.084824833
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.124232125,
+                "median_seconds": 0.11146175,
+                "min_seconds": 0.107763625,
+                "samples_seconds": [
+                  0.124232125,
+                  0.11338425,
+                  0.11146175,
+                  0.111214583,
+                  0.109418167,
+                  0.107763625,
+                  0.123410208
+                ]
+              },
+              "llama_over_native": 1.3058850356278062,
+              "native": {
+                "max_seconds": 0.102415125,
+                "median_seconds": 0.085353417,
+                "min_seconds": 0.081199791,
+                "samples_seconds": [
+                  0.102415125,
+                  0.085353417,
+                  0.0889445,
+                  0.084761167,
+                  0.089105917,
+                  0.081199791,
+                  0.085044416
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.013789625,
+                "median_seconds": 0.012878875,
+                "min_seconds": 0.012377792,
+                "samples_seconds": [
+                  0.012789,
+                  0.012377792,
+                  0.013286292,
+                  0.012878875,
+                  0.013531083,
+                  0.012848042,
+                  0.013789625
+                ]
+              },
+              "llama_over_native": 1.9246618844803107,
+              "native": {
+                "max_seconds": 0.006774875,
+                "median_seconds": 0.0066915,
+                "min_seconds": 0.006077375,
+                "samples_seconds": [
+                  0.006077375,
+                  0.006743083,
+                  0.006498166,
+                  0.0067165,
+                  0.0066915,
+                  0.006774875,
+                  0.006439792
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.019898167,
+                "median_seconds": 0.015110125,
+                "min_seconds": 0.01284225,
+                "samples_seconds": [
+                  0.019898167,
+                  0.019560458,
+                  0.015647208,
+                  0.015110125,
+                  0.014992708,
+                  0.014348292,
+                  0.01284225
+                ]
+              },
+              "llama_over_native": 1.963777762499745,
+              "native": {
+                "max_seconds": 0.010592875,
+                "median_seconds": 0.007694417,
+                "min_seconds": 0.006803584,
+                "samples_seconds": [
+                  0.010592875,
+                  0.008362125,
+                  0.008163208,
+                  0.007694417,
+                  0.007359,
+                  0.006803584,
+                  0.006935084
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.135307375,
+                "median_seconds": 0.114448417,
+                "min_seconds": 0.104252583,
+                "samples_seconds": [
+                  0.114448417,
+                  0.110075,
+                  0.106231917,
+                  0.104252583,
+                  0.119869583,
+                  0.11471875,
+                  0.135307375
+                ]
+              },
+              "llama_over_native": 1.3729972512682704,
+              "native": {
+                "max_seconds": 0.101543583,
+                "median_seconds": 0.083356625,
+                "min_seconds": 0.079602667,
+                "samples_seconds": [
+                  0.08611725,
+                  0.079602667,
+                  0.082622792,
+                  0.080233416,
+                  0.083356625,
+                  0.091370625,
+                  0.101543583
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.114105833,
+                "median_seconds": 0.104696125,
+                "min_seconds": 0.099985291,
+                "samples_seconds": [
+                  0.105287958,
+                  0.104696125,
+                  0.114105833,
+                  0.099985291,
+                  0.10875125,
+                  0.103406958,
+                  0.103665542
+                ]
+              },
+              "llama_over_native": 1.316544613727358,
+              "native": {
+                "max_seconds": 0.086587083,
+                "median_seconds": 0.079523416,
+                "min_seconds": 0.072425917,
+                "samples_seconds": [
+                  0.072425917,
+                  0.081554,
+                  0.086587083,
+                  0.072939875,
+                  0.079523416,
+                  0.078510709,
+                  0.082279167
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.0366725,
+                "median_seconds": 0.030179583,
+                "min_seconds": 0.026747791,
+                "samples_seconds": [
+                  0.0366725,
+                  0.034329708,
+                  0.03507375,
+                  0.030179583,
+                  0.028762209,
+                  0.027063666,
+                  0.026747791
+                ]
+              },
+              "llama_over_native": 1.4155830833514154,
+              "native": {
+                "max_seconds": 0.027475125,
+                "median_seconds": 0.021319542,
+                "min_seconds": 0.019809583,
+                "samples_seconds": [
+                  0.027475125,
+                  0.024331667,
+                  0.026079083,
+                  0.021319542,
+                  0.020105167,
+                  0.020959292,
+                  0.019809583
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.037712459,
+                "median_seconds": 0.029197417,
+                "min_seconds": 0.026229458,
+                "samples_seconds": [
+                  0.0266225,
+                  0.026229458,
+                  0.029197417,
+                  0.026914667,
+                  0.031874791,
+                  0.032065417,
+                  0.037712459
+                ]
+              },
+              "llama_over_native": 1.3748264245803796,
+              "native": {
+                "max_seconds": 0.027119667,
+                "median_seconds": 0.021237166,
+                "min_seconds": 0.01815125,
+                "samples_seconds": [
+                  0.018306209,
+                  0.01815125,
+                  0.018362292,
+                  0.021237166,
+                  0.0227725,
+                  0.026168167,
+                  0.027119667
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.176782375,
+                "median_seconds": 0.125490625,
+                "min_seconds": 0.105674,
+                "samples_seconds": [
+                  0.105674,
+                  0.129252917,
+                  0.122613417,
+                  0.127793291,
+                  0.176782375,
+                  0.125490625,
+                  0.123439
+                ]
+              },
+              "llama_over_native": 1.4130879034039585,
+              "native": {
+                "max_seconds": 0.11560875,
+                "median_seconds": 0.088805958,
+                "min_seconds": 0.064014875,
+                "samples_seconds": [
+                  0.064014875,
+                  0.105965708,
+                  0.11560875,
+                  0.088805958,
+                  0.099003291,
+                  0.065275625,
+                  0.072751792
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.1823565,
+                "median_seconds": 0.128971375,
+                "min_seconds": 0.076074459,
+                "samples_seconds": [
+                  0.076074459,
+                  0.094038541,
+                  0.088845958,
+                  0.128971375,
+                  0.158479959,
+                  0.1823565,
+                  0.14539325
+                ]
+              },
+              "llama_over_native": 1.7935120085383445,
+              "native": {
+                "max_seconds": 0.115302,
+                "median_seconds": 0.071909959,
+                "min_seconds": 0.047178458,
+                "samples_seconds": [
+                  0.047178458,
+                  0.071909959,
+                  0.070180875,
+                  0.095748375,
+                  0.115302,
+                  0.070550834,
+                  0.077928792
+                ]
+              },
+              "reaches_1_50": true
+            }
+          },
+          "name": "frozen-final-2"
+        },
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.704926291,
+                "median_seconds": 0.630232625,
+                "min_seconds": 0.586092625,
+                "samples_seconds": [
+                  0.680982458,
+                  0.630232625,
+                  0.654654584,
+                  0.625682583,
+                  0.704926291,
+                  0.599743292,
+                  0.586092625
+                ]
+              },
+              "llama_over_native": 1.0768791600196415,
+              "native": {
+                "max_seconds": 0.609987625,
+                "median_seconds": 0.585239875,
+                "min_seconds": 0.544293917,
+                "samples_seconds": [
+                  0.544293917,
+                  0.585239875,
+                  0.561228708,
+                  0.602189875,
+                  0.586611959,
+                  0.609987625,
+                  0.556005
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.723783292,
+                "median_seconds": 0.623612042,
+                "min_seconds": 0.594063417,
+                "samples_seconds": [
+                  0.623612042,
+                  0.620152041,
+                  0.594063417,
+                  0.604527208,
+                  0.665680583,
+                  0.658320583,
+                  0.723783292
+                ]
+              },
+              "llama_over_native": 1.1154940846469505,
+              "native": {
+                "max_seconds": 0.58208,
+                "median_seconds": 0.559045584,
+                "min_seconds": 0.498049292,
+                "samples_seconds": [
+                  0.519675958,
+                  0.559981,
+                  0.498049292,
+                  0.563255125,
+                  0.549212834,
+                  0.58208,
+                  0.559045584
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.14036625,
+                "median_seconds": 0.1254615,
+                "min_seconds": 0.12114975,
+                "samples_seconds": [
+                  0.1254615,
+                  0.12114975,
+                  0.135316458,
+                  0.14036625,
+                  0.137291875,
+                  0.123011333,
+                  0.12235275
+                ]
+              },
+              "llama_over_native": 1.3404095914101992,
+              "native": {
+                "max_seconds": 0.124087042,
+                "median_seconds": 0.093599375,
+                "min_seconds": 0.086533042,
+                "samples_seconds": [
+                  0.096221833,
+                  0.086533042,
+                  0.093599375,
+                  0.124087042,
+                  0.122200625,
+                  0.089729583,
+                  0.088188708
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.128292292,
+                "median_seconds": 0.120893208,
+                "min_seconds": 0.111743375,
+                "samples_seconds": [
+                  0.128292292,
+                  0.125642833,
+                  0.117305125,
+                  0.124790208,
+                  0.120893208,
+                  0.111743375,
+                  0.120415375
+                ]
+              },
+              "llama_over_native": 1.2225028766077335,
+              "native": {
+                "max_seconds": 0.104560875,
+                "median_seconds": 0.098889917,
+                "min_seconds": 0.0907155,
+                "samples_seconds": [
+                  0.098889917,
+                  0.099491166,
+                  0.095226541,
+                  0.099422208,
+                  0.104560875,
+                  0.0907155,
+                  0.09815
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.015757458,
+                "median_seconds": 0.015061875,
+                "min_seconds": 0.014102042,
+                "samples_seconds": [
+                  0.015757458,
+                  0.015631958,
+                  0.015044417,
+                  0.014102042,
+                  0.015061875,
+                  0.014800542,
+                  0.015101791
+                ]
+              },
+              "llama_over_native": 1.9542899693697344,
+              "native": {
+                "max_seconds": 0.008496,
+                "median_seconds": 0.007707083,
+                "min_seconds": 0.0073055,
+                "samples_seconds": [
+                  0.008496,
+                  0.007525709,
+                  0.007852125,
+                  0.007707083,
+                  0.007940542,
+                  0.007535375,
+                  0.0073055
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.024562958,
+                "median_seconds": 0.019754542,
+                "min_seconds": 0.016071208,
+                "samples_seconds": [
+                  0.024562958,
+                  0.021821666,
+                  0.020657625,
+                  0.019754542,
+                  0.017561958,
+                  0.016071208,
+                  0.016496292
+                ]
+              },
+              "llama_over_native": 2.1372146324971264,
+              "native": {
+                "max_seconds": 0.012520625,
+                "median_seconds": 0.009243125,
+                "min_seconds": 0.007906917,
+                "samples_seconds": [
+                  0.012520625,
+                  0.00984275,
+                  0.010074417,
+                  0.009243125,
+                  0.008602375,
+                  0.008414667,
+                  0.007906917
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.129542292,
+                "median_seconds": 0.121876458,
+                "min_seconds": 0.110013875,
+                "samples_seconds": [
+                  0.125161833,
+                  0.125669667,
+                  0.121876458,
+                  0.110013875,
+                  0.114414416,
+                  0.119098916,
+                  0.129542292
+                ]
+              },
+              "llama_over_native": 1.2586165718582154,
+              "native": {
+                "max_seconds": 0.100112375,
+                "median_seconds": 0.096833667,
+                "min_seconds": 0.079287083,
+                "samples_seconds": [
+                  0.100112375,
+                  0.096833667,
+                  0.09854725,
+                  0.079287083,
+                  0.084955958,
+                  0.095083792,
+                  0.099649541
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.128609292,
+                "median_seconds": 0.108002625,
+                "min_seconds": 0.102304625,
+                "samples_seconds": [
+                  0.111836667,
+                  0.108002625,
+                  0.104945625,
+                  0.107427625,
+                  0.1098575,
+                  0.102304625,
+                  0.128609292
+                ]
+              },
+              "llama_over_native": 1.2721912766597987,
+              "native": {
+                "max_seconds": 0.088430875,
+                "median_seconds": 0.084894958,
+                "min_seconds": 0.075572,
+                "samples_seconds": [
+                  0.084894958,
+                  0.081826083,
+                  0.0852085,
+                  0.0779975,
+                  0.085754958,
+                  0.075572,
+                  0.088430875
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.036195833,
+                "median_seconds": 0.034215125,
+                "min_seconds": 0.032663833,
+                "samples_seconds": [
+                  0.034016417,
+                  0.033603584,
+                  0.035984458,
+                  0.035066292,
+                  0.036195833,
+                  0.034215125,
+                  0.032663833
+                ]
+              },
+              "llama_over_native": 1.2753017793180985,
+              "native": {
+                "max_seconds": 0.02782,
+                "median_seconds": 0.026829042,
+                "min_seconds": 0.024083375,
+                "samples_seconds": [
+                  0.024083375,
+                  0.02782,
+                  0.026885042,
+                  0.026820208,
+                  0.027552708,
+                  0.026829042,
+                  0.025157416
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.029272459,
+                "median_seconds": 0.028354625,
+                "min_seconds": 0.025392208,
+                "samples_seconds": [
+                  0.027434208,
+                  0.025392208,
+                  0.028045792,
+                  0.028354625,
+                  0.029272459,
+                  0.028492708,
+                  0.028968958
+                ]
+              },
+              "llama_over_native": 1.5352620045486158,
+              "native": {
+                "max_seconds": 0.022145542,
+                "median_seconds": 0.018468916,
+                "min_seconds": 0.018052125,
+                "samples_seconds": [
+                  0.018468916,
+                  0.018052125,
+                  0.01808575,
+                  0.018147,
+                  0.018927542,
+                  0.020377625,
+                  0.022145542
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.147732375,
+                "median_seconds": 0.106644875,
+                "min_seconds": 0.083060084,
+                "samples_seconds": [
+                  0.122800542,
+                  0.106644875,
+                  0.09751025,
+                  0.100472125,
+                  0.083060084,
+                  0.119098625,
+                  0.147732375
+                ]
+              },
+              "llama_over_native": 1.5211223732509338,
+              "native": {
+                "max_seconds": 0.090657167,
+                "median_seconds": 0.070109333,
+                "min_seconds": 0.063415584,
+                "samples_seconds": [
+                  0.090657167,
+                  0.065999958,
+                  0.063415584,
+                  0.070109333,
+                  0.065544083,
+                  0.072870083,
+                  0.078453875
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.116723709,
+                "median_seconds": 0.086229459,
+                "min_seconds": 0.075165208,
+                "samples_seconds": [
+                  0.079016875,
+                  0.075165208,
+                  0.076367334,
+                  0.086229459,
+                  0.100680166,
+                  0.105657208,
+                  0.116723709
+                ]
+              },
+              "llama_over_native": 1.4446124521750785,
+              "native": {
+                "max_seconds": 0.079981458,
+                "median_seconds": 0.059690375,
+                "min_seconds": 0.048612125,
+                "samples_seconds": [
+                  0.049195417,
+                  0.049042,
+                  0.048612125,
+                  0.063533833,
+                  0.059690375,
+                  0.079981458,
+                  0.0796625
+                ]
+              },
+              "reaches_1_50": false
+            }
+          },
+          "name": "frozen-final-3"
+        }
+      ],
+      "workloads": [
+        {
+          "calls": 12,
+          "case": "query-b1",
+          "gemma_packs": 12,
+          "llama_packs": 12,
+          "text_sha256": "e0f1e4fc8fb254b4a26f39a5b31fd6877a951b1a3e76da81ab5cf213625af390",
+          "token_lengths": [
+            16,
+            14,
+            13,
+            15,
+            13,
+            14,
+            14,
+            15,
+            13,
+            15,
+            15,
+            14
+          ],
+          "token_sha256": "de48f8078135ee4133a537955e8fd0deabe599e790010067ce0839ba832eeab5",
+          "tokens": 171,
+          "vectors": 12
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b1",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "932c70f8ec6c7637b3e3678cd101669b682c155156d45640ab0c54a04ba40d0f",
+          "token_lengths": [
+            64
+          ],
+          "token_sha256": "e8d54b1d825a4c08ca1e8227aed9e029fb60cecdfbc42230db203a688a23ec69",
+          "tokens": 64,
+          "vectors": 1
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b8",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "829f120dcd17a49e0a457bb788e43be4d810f9834f12a4dd4df009d2943983d6",
+          "token_lengths": [
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64
+          ],
+          "token_sha256": "d3ce67b09e56163f4fa840fac461bfb89bd1956b2e6d5bc8cd1083b55280ba18",
+          "tokens": 512,
+          "vectors": 8
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b32",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "15992aa45b2455e53cf7b6bf02e4769980fa862a317d283f4df9f84ccce7f751",
+          "token_lengths": [
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64
+          ],
+          "token_sha256": "9a537d5d4c30fadb5fa2c94f0b9144ed44464d964cd555836ca8659dd9290ddc",
+          "tokens": 2048,
+          "vectors": 32
+        },
+        {
+          "calls": 1,
+          "case": "doc256-b8",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "b7ffdc0b63b314a8419e58f649a8007c97ef609da662bced03827ac6ee948c3e",
+          "token_lengths": [
+            256,
+            256,
+            256,
+            256,
+            256,
+            256,
+            256,
+            256
+          ],
+          "token_sha256": "9eadd77a31899008e753e4d295fcd5f781b36115de687114599567b48ed07cce",
+          "tokens": 2048,
+          "vectors": 8
+        },
+        {
+          "calls": 1,
+          "case": "doc1024-b8",
+          "gemma_packs": 1,
+          "llama_packs": 4,
+          "text_sha256": "deafb7c3ace61535a30498e4c884b21baecb668d67fa59a24b74d5ad5fa384d9",
+          "token_lengths": [
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024
+          ],
+          "token_sha256": "08c477481c37bbca54a9d496d30180ed839ca777d4509f78574bef736ab9cebb",
+          "tokens": 8192,
+          "vectors": 8
+        }
+      ]
+    },
+    "short_text": {
+      "llama_settings": {
+        "llama_batch": 2048,
+        "llama_context": 8192,
+        "llama_gpu_layers": 999,
+        "llama_kv_unified": true,
+        "llama_pooling": "mean",
+        "llama_sequences": 64,
+        "llama_threads": 12,
+        "llama_threads_batch": 12,
+        "llama_ubatch": 2048
+      },
+      "modality": "text",
+      "native_source_commit": "39b8b3f6594e6fba1a0d4a0b7f8a135e0364a264",
+      "runs": [
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.558424083,
+                "median_seconds": 0.515763375,
+                "min_seconds": 0.512497958,
+                "samples_seconds": [
+                  0.525807541,
+                  0.513939042,
+                  0.538109625,
+                  0.512497958,
+                  0.515763375,
+                  0.513422375,
+                  0.558424083
+                ]
+              },
+              "llama_over_native": 1.2059324149448991,
+              "native": {
+                "max_seconds": 0.469830792,
+                "median_seconds": 0.427688458,
+                "min_seconds": 0.413280708,
+                "samples_seconds": [
+                  0.469830792,
+                  0.419061541,
+                  0.427688458,
+                  0.413280708,
+                  0.426328875,
+                  0.432880208,
+                  0.468772833
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.572700875,
+                "median_seconds": 0.527797084,
+                "min_seconds": 0.491105375,
+                "samples_seconds": [
+                  0.497075458,
+                  0.491105375,
+                  0.536658167,
+                  0.505811042,
+                  0.537891,
+                  0.527797084,
+                  0.572700875
+                ]
+              },
+              "llama_over_native": 1.2650258366416711,
+              "native": {
+                "max_seconds": 0.49853375,
+                "median_seconds": 0.417222375,
+                "min_seconds": 0.392202084,
+                "samples_seconds": [
+                  0.393460791,
+                  0.392202084,
+                  0.401230458,
+                  0.417222375,
+                  0.451611709,
+                  0.459656041,
+                  0.49853375
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.10568625,
+                "median_seconds": 0.101087,
+                "min_seconds": 0.099585625,
+                "samples_seconds": [
+                  0.10568625,
+                  0.101958709,
+                  0.101095291,
+                  0.101087,
+                  0.100874042,
+                  0.099711792,
+                  0.099585625
+                ]
+              },
+              "llama_over_native": 1.2573948304599847,
+              "native": {
+                "max_seconds": 0.083168833,
+                "median_seconds": 0.080394,
+                "min_seconds": 0.078010792,
+                "samples_seconds": [
+                  0.08072275,
+                  0.083168833,
+                  0.080787292,
+                  0.079512125,
+                  0.07940575,
+                  0.080394,
+                  0.078010792
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.097096667,
+                "median_seconds": 0.0956855,
+                "min_seconds": 0.0951505,
+                "samples_seconds": [
+                  0.0951505,
+                  0.095486958,
+                  0.096177334,
+                  0.095246792,
+                  0.0956855,
+                  0.09593975,
+                  0.097096667
+                ]
+              },
+              "llama_over_native": 1.2951278151219272,
+              "native": {
+                "max_seconds": 0.073950958,
+                "median_seconds": 0.073881125,
+                "min_seconds": 0.073590542,
+                "samples_seconds": [
+                  0.073950958,
+                  0.073927167,
+                  0.073590542,
+                  0.0739,
+                  0.073691792,
+                  0.073881125,
+                  0.073729041
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.012546542,
+                "median_seconds": 0.012253167,
+                "min_seconds": 0.01152025,
+                "samples_seconds": [
+                  0.012285125,
+                  0.01152025,
+                  0.012517334,
+                  0.011580792,
+                  0.012253167,
+                  0.012546542,
+                  0.011665958
+                ]
+              },
+              "llama_over_native": 1.6433049546451064,
+              "native": {
+                "max_seconds": 0.007861167,
+                "median_seconds": 0.007456417,
+                "min_seconds": 0.007304958,
+                "samples_seconds": [
+                  0.007861167,
+                  0.007732292,
+                  0.007652125,
+                  0.007354625,
+                  0.007414625,
+                  0.007456417,
+                  0.007304958
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.013459959,
+                "median_seconds": 0.012412458,
+                "min_seconds": 0.011596042,
+                "samples_seconds": [
+                  0.013459959,
+                  0.012486333,
+                  0.012412458,
+                  0.011780584,
+                  0.012508042,
+                  0.011596042,
+                  0.011896791
+                ]
+              },
+              "llama_over_native": 1.6695567189175236,
+              "native": {
+                "max_seconds": 0.009554417,
+                "median_seconds": 0.007434583,
+                "min_seconds": 0.007290708,
+                "samples_seconds": [
+                  0.009554417,
+                  0.007423625,
+                  0.00734425,
+                  0.007503917,
+                  0.007290708,
+                  0.007485791,
+                  0.007434583
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.09319675,
+                "median_seconds": 0.092736042,
+                "min_seconds": 0.091605125,
+                "samples_seconds": [
+                  0.092885583,
+                  0.09319675,
+                  0.092736042,
+                  0.091605125,
+                  0.0929915,
+                  0.092610292,
+                  0.092355459
+                ]
+              },
+              "llama_over_native": 1.3099906874248453,
+              "native": {
+                "max_seconds": 0.071421375,
+                "median_seconds": 0.070791375,
+                "min_seconds": 0.070031625,
+                "samples_seconds": [
+                  0.071421375,
+                  0.071339833,
+                  0.070791375,
+                  0.0708505,
+                  0.070469875,
+                  0.070031625,
+                  0.070416541
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.098114667,
+                "median_seconds": 0.094255,
+                "min_seconds": 0.089930208,
+                "samples_seconds": [
+                  0.094697709,
+                  0.094609708,
+                  0.094255,
+                  0.089930208,
+                  0.094144209,
+                  0.093820292,
+                  0.098114667
+                ]
+              },
+              "llama_over_native": 1.3858685663453976,
+              "native": {
+                "max_seconds": 0.071232167,
+                "median_seconds": 0.0680115,
+                "min_seconds": 0.067287375,
+                "samples_seconds": [
+                  0.0680115,
+                  0.0673595,
+                  0.067287375,
+                  0.067548709,
+                  0.071232167,
+                  0.069328792,
+                  0.070980959
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.026223625,
+                "median_seconds": 0.025737125,
+                "min_seconds": 0.025386166,
+                "samples_seconds": [
+                  0.025386166,
+                  0.025737125,
+                  0.025696083,
+                  0.025520125,
+                  0.026223625,
+                  0.025774833,
+                  0.025979542
+                ]
+              },
+              "llama_over_native": 1.2003672675982817,
+              "native": {
+                "max_seconds": 0.02167725,
+                "median_seconds": 0.021441042,
+                "min_seconds": 0.020787708,
+                "samples_seconds": [
+                  0.021423834,
+                  0.021441042,
+                  0.021201375,
+                  0.021675,
+                  0.020787708,
+                  0.021531458,
+                  0.02167725
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.025298667,
+                "median_seconds": 0.024853708,
+                "min_seconds": 0.024614375,
+                "samples_seconds": [
+                  0.024614375,
+                  0.024853708,
+                  0.0247905,
+                  0.024679625,
+                  0.024854209,
+                  0.025298667,
+                  0.02493825
+                ]
+              },
+              "llama_over_native": 1.2470761055524289,
+              "native": {
+                "max_seconds": 0.020048542,
+                "median_seconds": 0.019929584,
+                "min_seconds": 0.019560125,
+                "samples_seconds": [
+                  0.019892833,
+                  0.019929584,
+                  0.020019458,
+                  0.019560125,
+                  0.020048542,
+                  0.01990075,
+                  0.019956333
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.17318775,
+                "median_seconds": 0.077504708,
+                "min_seconds": 0.075341708,
+                "samples_seconds": [
+                  0.130759167,
+                  0.17318775,
+                  0.078702959,
+                  0.077504708,
+                  0.077488584,
+                  0.075341708,
+                  0.075869084
+                ]
+              },
+              "llama_over_native": 1.4609861872052794,
+              "native": {
+                "max_seconds": 0.074706,
+                "median_seconds": 0.053049583,
+                "min_seconds": 0.047465708,
+                "samples_seconds": [
+                  0.074706,
+                  0.070687292,
+                  0.065618375,
+                  0.053049583,
+                  0.048903167,
+                  0.047805458,
+                  0.047465708
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.09867075,
+                "median_seconds": 0.080266583,
+                "min_seconds": 0.075356333,
+                "samples_seconds": [
+                  0.079931792,
+                  0.08905075,
+                  0.09867075,
+                  0.0959835,
+                  0.080266583,
+                  0.075356333,
+                  0.075804333
+                ]
+              },
+              "llama_over_native": 1.5088436438341293,
+              "native": {
+                "max_seconds": 0.071438083,
+                "median_seconds": 0.053197416,
+                "min_seconds": 0.047385958,
+                "samples_seconds": [
+                  0.047385958,
+                  0.04989475,
+                  0.053197416,
+                  0.06447675,
+                  0.071438083,
+                  0.056875416,
+                  0.050472584
+                ]
+              },
+              "reaches_1_50": true
+            }
+          },
+          "name": "final-repeat-1"
+        },
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.597247083,
+                "median_seconds": 0.563610542,
+                "min_seconds": 0.537930375,
+                "samples_seconds": [
+                  0.569862292,
+                  0.537930375,
+                  0.551839875,
+                  0.539339292,
+                  0.580793709,
+                  0.597247083,
+                  0.563610542
+                ]
+              },
+              "llama_over_native": 1.074857006500084,
+              "native": {
+                "max_seconds": 0.543045458,
+                "median_seconds": 0.524358625,
+                "min_seconds": 0.447980584,
+                "samples_seconds": [
+                  0.525019208,
+                  0.447980584,
+                  0.488818416,
+                  0.532145833,
+                  0.510150625,
+                  0.524358625,
+                  0.543045458
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.578278875,
+                "median_seconds": 0.551782375,
+                "min_seconds": 0.528256125,
+                "samples_seconds": [
+                  0.551782375,
+                  0.529083166,
+                  0.53077325,
+                  0.558776917,
+                  0.578278875,
+                  0.559331666,
+                  0.528256125
+                ]
+              },
+              "llama_over_native": 1.0826381662254863,
+              "native": {
+                "max_seconds": 0.581085542,
+                "median_seconds": 0.509664625,
+                "min_seconds": 0.460742458,
+                "samples_seconds": [
+                  0.460742458,
+                  0.50277475,
+                  0.509664625,
+                  0.51761325,
+                  0.581085542,
+                  0.509728625,
+                  0.488773291
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.105361458,
+                "median_seconds": 0.102137833,
+                "min_seconds": 0.101135791,
+                "samples_seconds": [
+                  0.102594625,
+                  0.101284959,
+                  0.102646542,
+                  0.101348083,
+                  0.101135791,
+                  0.102137833,
+                  0.105361458
+                ]
+              },
+              "llama_over_native": 1.268051941621891,
+              "native": {
+                "max_seconds": 0.083674667,
+                "median_seconds": 0.080547042,
+                "min_seconds": 0.07882975,
+                "samples_seconds": [
+                  0.080547042,
+                  0.079957625,
+                  0.07882975,
+                  0.079490791,
+                  0.080766792,
+                  0.082653917,
+                  0.083674667
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.107438583,
+                "median_seconds": 0.09986875,
+                "min_seconds": 0.096553416,
+                "samples_seconds": [
+                  0.106476834,
+                  0.107438583,
+                  0.101649125,
+                  0.09986875,
+                  0.099215375,
+                  0.09934775,
+                  0.096553416
+                ]
+              },
+              "llama_over_native": 1.3193863454262214,
+              "native": {
+                "max_seconds": 0.080800875,
+                "median_seconds": 0.075693333,
+                "min_seconds": 0.075291791,
+                "samples_seconds": [
+                  0.075668458,
+                  0.075617916,
+                  0.076853583,
+                  0.079192708,
+                  0.080800875,
+                  0.075291791,
+                  0.075693333
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.016954542,
+                "median_seconds": 0.014615875,
+                "min_seconds": 0.013346292,
+                "samples_seconds": [
+                  0.016954542,
+                  0.016520833,
+                  0.014615875,
+                  0.01501,
+                  0.014355833,
+                  0.013346292,
+                  0.014215833
+                ]
+              },
+              "llama_over_native": 1.6840020739119166,
+              "native": {
+                "max_seconds": 0.010250417,
+                "median_seconds": 0.00867925,
+                "min_seconds": 0.008109458,
+                "samples_seconds": [
+                  0.010250417,
+                  0.009095708,
+                  0.009466541,
+                  0.008265917,
+                  0.00867925,
+                  0.008122916,
+                  0.008109458
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.017053792,
+                "median_seconds": 0.015634458,
+                "min_seconds": 0.014829958,
+                "samples_seconds": [
+                  0.017053792,
+                  0.016613791,
+                  0.014867084,
+                  0.014829958,
+                  0.015634458,
+                  0.01547275,
+                  0.01640475
+                ]
+              },
+              "llama_over_native": 1.6493277820039494,
+              "native": {
+                "max_seconds": 0.010285833,
+                "median_seconds": 0.009479291,
+                "min_seconds": 0.008743917,
+                "samples_seconds": [
+                  0.010285833,
+                  0.009253833,
+                  0.009813916,
+                  0.00894425,
+                  0.009479291,
+                  0.008743917,
+                  0.00996075
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.093849917,
+                "median_seconds": 0.09290975,
+                "min_seconds": 0.092307834,
+                "samples_seconds": [
+                  0.092307834,
+                  0.09290975,
+                  0.093537542,
+                  0.0927215,
+                  0.092936666,
+                  0.093849917,
+                  0.092844584
+                ]
+              },
+              "llama_over_native": 1.309118903541842,
+              "native": {
+                "max_seconds": 0.071560125,
+                "median_seconds": 0.070971208,
+                "min_seconds": 0.070094709,
+                "samples_seconds": [
+                  0.071560125,
+                  0.071460375,
+                  0.071106667,
+                  0.070971208,
+                  0.070700542,
+                  0.070094709,
+                  0.070677291
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.09327525,
+                "median_seconds": 0.089208125,
+                "min_seconds": 0.088507333,
+                "samples_seconds": [
+                  0.088507333,
+                  0.089208125,
+                  0.09327525,
+                  0.092637458,
+                  0.09040175,
+                  0.089123292,
+                  0.088951417
+                ]
+              },
+              "llama_over_native": 1.3179960879174613,
+              "native": {
+                "max_seconds": 0.07133325,
+                "median_seconds": 0.067684666,
+                "min_seconds": 0.065793,
+                "samples_seconds": [
+                  0.065793,
+                  0.066470792,
+                  0.069459375,
+                  0.070570416,
+                  0.07133325,
+                  0.067026125,
+                  0.067684666
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.028122417,
+                "median_seconds": 0.027294958,
+                "min_seconds": 0.026028083,
+                "samples_seconds": [
+                  0.027294958,
+                  0.028068958,
+                  0.028122417,
+                  0.028051375,
+                  0.026197167,
+                  0.026339041,
+                  0.026028083
+                ]
+              },
+              "llama_over_native": 1.229094298628271,
+              "native": {
+                "max_seconds": 0.022687416,
+                "median_seconds": 0.022207375,
+                "min_seconds": 0.021437209,
+                "samples_seconds": [
+                  0.022687416,
+                  0.022035167,
+                  0.022686125,
+                  0.022207375,
+                  0.022246791,
+                  0.021437209,
+                  0.021694583
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.028479292,
+                "median_seconds": 0.027733542,
+                "min_seconds": 0.025004208,
+                "samples_seconds": [
+                  0.02800475,
+                  0.02614625,
+                  0.025004208,
+                  0.027733542,
+                  0.0273195,
+                  0.02826925,
+                  0.028479292
+                ]
+              },
+              "llama_over_native": 1.3347310364742189,
+              "native": {
+                "max_seconds": 0.021020833,
+                "median_seconds": 0.020778375,
+                "min_seconds": 0.020328166,
+                "samples_seconds": [
+                  0.020778375,
+                  0.020328166,
+                  0.0206065,
+                  0.020930917,
+                  0.021020833,
+                  0.0206475,
+                  0.020892
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.091046334,
+                "median_seconds": 0.079733375,
+                "min_seconds": 0.077742541,
+                "samples_seconds": [
+                  0.079582375,
+                  0.079733375,
+                  0.079923708,
+                  0.079374333,
+                  0.079809042,
+                  0.077742541,
+                  0.091046334
+                ]
+              },
+              "llama_over_native": 1.5624357626623169,
+              "native": {
+                "max_seconds": 0.054234542,
+                "median_seconds": 0.051031458,
+                "min_seconds": 0.047626291,
+                "samples_seconds": [
+                  0.048435583,
+                  0.050287916,
+                  0.047626291,
+                  0.051821583,
+                  0.051031458,
+                  0.052735458,
+                  0.054234542
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.089613958,
+                "median_seconds": 0.0767995,
+                "min_seconds": 0.0757275,
+                "samples_seconds": [
+                  0.0757275,
+                  0.078545958,
+                  0.0767995,
+                  0.089613958,
+                  0.075868208,
+                  0.079627833,
+                  0.076019791
+                ]
+              },
+              "llama_over_native": 1.5645800723272592,
+              "native": {
+                "max_seconds": 0.059475375,
+                "median_seconds": 0.049086334,
+                "min_seconds": 0.045374292,
+                "samples_seconds": [
+                  0.0499715,
+                  0.046649708,
+                  0.049090792,
+                  0.059475375,
+                  0.045374292,
+                  0.049086334,
+                  0.048239709
+                ]
+              },
+              "reaches_1_50": true
+            }
+          },
+          "name": "final-repeat-2"
+        },
+        {
+          "cases": {
+            "doc1024-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.65407975,
+                "median_seconds": 0.597174959,
+                "min_seconds": 0.553627584,
+                "samples_seconds": [
+                  0.560117292,
+                  0.6216685,
+                  0.620665833,
+                  0.65407975,
+                  0.563431875,
+                  0.553627584,
+                  0.597174959
+                ]
+              },
+              "llama_over_native": 1.1180051644269269,
+              "native": {
+                "max_seconds": 0.569092584,
+                "median_seconds": 0.534143292,
+                "min_seconds": 0.4834135,
+                "samples_seconds": [
+                  0.563673458,
+                  0.555074625,
+                  0.52604475,
+                  0.569092584,
+                  0.528540333,
+                  0.4834135,
+                  0.534143292
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc1024-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.6472505,
+                "median_seconds": 0.552955167,
+                "min_seconds": 0.537462333,
+                "samples_seconds": [
+                  0.566280292,
+                  0.580998833,
+                  0.543902916,
+                  0.537462333,
+                  0.552955167,
+                  0.550163875,
+                  0.6472505
+                ]
+              },
+              "llama_over_native": 1.1266161302029678,
+              "native": {
+                "max_seconds": 0.531317666,
+                "median_seconds": 0.490810625,
+                "min_seconds": 0.456662334,
+                "samples_seconds": [
+                  0.495789125,
+                  0.524378584,
+                  0.490810625,
+                  0.458180667,
+                  0.456662334,
+                  0.484823042,
+                  0.531317666
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.112944125,
+                "median_seconds": 0.107632291,
+                "min_seconds": 0.104540458,
+                "samples_seconds": [
+                  0.107632291,
+                  0.105430042,
+                  0.107284333,
+                  0.107697875,
+                  0.112642625,
+                  0.104540458,
+                  0.112944125
+                ]
+              },
+              "llama_over_native": 1.2304923273011112,
+              "native": {
+                "max_seconds": 0.091002708,
+                "median_seconds": 0.087470916,
+                "min_seconds": 0.085905667,
+                "samples_seconds": [
+                  0.087470916,
+                  0.087462875,
+                  0.088515458,
+                  0.086994833,
+                  0.085905667,
+                  0.087481083,
+                  0.091002708
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc256-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.106720417,
+                "median_seconds": 0.10242,
+                "min_seconds": 0.100947541,
+                "samples_seconds": [
+                  0.101994417,
+                  0.100947541,
+                  0.10242,
+                  0.102173458,
+                  0.106291916,
+                  0.104721291,
+                  0.106720417
+                ]
+              },
+              "llama_over_native": 1.2166026708954358,
+              "native": {
+                "max_seconds": 0.086591208,
+                "median_seconds": 0.08418525,
+                "min_seconds": 0.081566,
+                "samples_seconds": [
+                  0.086591208,
+                  0.081566,
+                  0.083432,
+                  0.083412375,
+                  0.085739208,
+                  0.08418525,
+                  0.085570333
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.015332792,
+                "median_seconds": 0.014476458,
+                "min_seconds": 0.013443042,
+                "samples_seconds": [
+                  0.014414166,
+                  0.013803833,
+                  0.015332792,
+                  0.014807375,
+                  0.014989458,
+                  0.013443042,
+                  0.014476458
+                ]
+              },
+              "llama_over_native": 1.6729424677848,
+              "native": {
+                "max_seconds": 0.009235083,
+                "median_seconds": 0.008653291,
+                "min_seconds": 0.007985,
+                "samples_seconds": [
+                  0.009235083,
+                  0.008756541,
+                  0.008600417,
+                  0.008653291,
+                  0.008954583,
+                  0.008488375,
+                  0.007985
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.016053459,
+                "median_seconds": 0.015514416,
+                "min_seconds": 0.011944542,
+                "samples_seconds": [
+                  0.011955666,
+                  0.011944542,
+                  0.015716459,
+                  0.016053459,
+                  0.015514416,
+                  0.0156995,
+                  0.015118541
+                ]
+              },
+              "llama_over_native": 1.6453136542948703,
+              "native": {
+                "max_seconds": 0.010347041,
+                "median_seconds": 0.009429458,
+                "min_seconds": 0.007468708,
+                "samples_seconds": [
+                  0.007468708,
+                  0.008342666,
+                  0.008140334,
+                  0.010347041,
+                  0.009512959,
+                  0.010225,
+                  0.009429458
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "doc64-b32:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.103338584,
+                "median_seconds": 0.094179542,
+                "min_seconds": 0.09347575,
+                "samples_seconds": [
+                  0.094179542,
+                  0.093591541,
+                  0.09347575,
+                  0.093762792,
+                  0.099253417,
+                  0.0980425,
+                  0.103338584
+                ]
+              },
+              "llama_over_native": 1.271541678741286,
+              "native": {
+                "max_seconds": 0.078121709,
+                "median_seconds": 0.074067208,
+                "min_seconds": 0.073047583,
+                "samples_seconds": [
+                  0.073047583,
+                  0.073566625,
+                  0.074067208,
+                  0.073802625,
+                  0.077880625,
+                  0.075178042,
+                  0.078121709
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b32:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.094866167,
+                "median_seconds": 0.089614667,
+                "min_seconds": 0.087895459,
+                "samples_seconds": [
+                  0.091013292,
+                  0.090298792,
+                  0.089614667,
+                  0.087895459,
+                  0.088238875,
+                  0.088398333,
+                  0.094866167
+                ]
+              },
+              "llama_over_native": 1.288641681779485,
+              "native": {
+                "max_seconds": 0.071859084,
+                "median_seconds": 0.069541959,
+                "min_seconds": 0.066553125,
+                "samples_seconds": [
+                  0.068359958,
+                  0.066553125,
+                  0.069541959,
+                  0.067844,
+                  0.069922,
+                  0.070058708,
+                  0.071859084
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.029982542,
+                "median_seconds": 0.029210708,
+                "min_seconds": 0.026621708,
+                "samples_seconds": [
+                  0.029982542,
+                  0.029421292,
+                  0.027058708,
+                  0.029604417,
+                  0.029194,
+                  0.026621708,
+                  0.029210708
+                ]
+              },
+              "llama_over_native": 1.3023440331462375,
+              "native": {
+                "max_seconds": 0.024031167,
+                "median_seconds": 0.022429333,
+                "min_seconds": 0.021837583,
+                "samples_seconds": [
+                  0.024031167,
+                  0.022358084,
+                  0.023114125,
+                  0.022224,
+                  0.023313083,
+                  0.021837583,
+                  0.022429333
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "doc64-b8:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.027873125,
+                "median_seconds": 0.024539458,
+                "min_seconds": 0.024378042,
+                "samples_seconds": [
+                  0.027873125,
+                  0.02560025,
+                  0.024445833,
+                  0.024539458,
+                  0.024378042,
+                  0.024458875,
+                  0.025793792
+                ]
+              },
+              "llama_over_native": 1.2163827675301901,
+              "native": {
+                "max_seconds": 0.020356292,
+                "median_seconds": 0.020174125,
+                "min_seconds": 0.019582583,
+                "samples_seconds": [
+                  0.020174125,
+                  0.020224791,
+                  0.019824042,
+                  0.019582583,
+                  0.020188042,
+                  0.020113459,
+                  0.020356292
+                ]
+              },
+              "reaches_1_50": false
+            },
+            "query-b1:full_api": {
+              "llama_cpp": {
+                "max_seconds": 0.080757042,
+                "median_seconds": 0.078764083,
+                "min_seconds": 0.077546916,
+                "samples_seconds": [
+                  0.080757042,
+                  0.078218333,
+                  0.079042042,
+                  0.077611625,
+                  0.078771167,
+                  0.078764083,
+                  0.077546916
+                ]
+              },
+              "llama_over_native": 1.6329252945550403,
+              "native": {
+                "max_seconds": 0.057434958,
+                "median_seconds": 0.048234958,
+                "min_seconds": 0.046349833,
+                "samples_seconds": [
+                  0.049312209,
+                  0.057434958,
+                  0.055562084,
+                  0.046349833,
+                  0.048234958,
+                  0.046654667,
+                  0.048042542
+                ]
+              },
+              "reaches_1_50": true
+            },
+            "query-b1:tokens": {
+              "llama_cpp": {
+                "max_seconds": 0.085773292,
+                "median_seconds": 0.079233459,
+                "min_seconds": 0.076374125,
+                "samples_seconds": [
+                  0.079387333,
+                  0.085773292,
+                  0.078255667,
+                  0.076374125,
+                  0.07958825,
+                  0.079233459,
+                  0.078268583
+                ]
+              },
+              "llama_over_native": 1.6275092933748598,
+              "native": {
+                "max_seconds": 0.063917416,
+                "median_seconds": 0.048683875,
+                "min_seconds": 0.047304875,
+                "samples_seconds": [
+                  0.047654167,
+                  0.063917416,
+                  0.055418834,
+                  0.048683875,
+                  0.047304875,
+                  0.049464875,
+                  0.047882833
+                ]
+              },
+              "reaches_1_50": true
+            }
+          },
+          "name": "final-repeat-3"
+        }
+      ],
+      "workloads": [
+        {
+          "calls": 12,
+          "case": "query-b1",
+          "gemma_packs": 12,
+          "llama_packs": 12,
+          "text_sha256": "e0f1e4fc8fb254b4a26f39a5b31fd6877a951b1a3e76da81ab5cf213625af390",
+          "token_lengths": [
+            16,
+            14,
+            13,
+            15,
+            13,
+            14,
+            14,
+            15,
+            13,
+            15,
+            15,
+            14
+          ],
+          "token_sha256": "de48f8078135ee4133a537955e8fd0deabe599e790010067ce0839ba832eeab5",
+          "tokens": 171,
+          "vectors": 12
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b1",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "932c70f8ec6c7637b3e3678cd101669b682c155156d45640ab0c54a04ba40d0f",
+          "token_lengths": [
+            64
+          ],
+          "token_sha256": "e8d54b1d825a4c08ca1e8227aed9e029fb60cecdfbc42230db203a688a23ec69",
+          "tokens": 64,
+          "vectors": 1
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b8",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "829f120dcd17a49e0a457bb788e43be4d810f9834f12a4dd4df009d2943983d6",
+          "token_lengths": [
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64
+          ],
+          "token_sha256": "d3ce67b09e56163f4fa840fac461bfb89bd1956b2e6d5bc8cd1083b55280ba18",
+          "tokens": 512,
+          "vectors": 8
+        },
+        {
+          "calls": 1,
+          "case": "doc64-b32",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "15992aa45b2455e53cf7b6bf02e4769980fa862a317d283f4df9f84ccce7f751",
+          "token_lengths": [
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64,
+            64
+          ],
+          "token_sha256": "9a537d5d4c30fadb5fa2c94f0b9144ed44464d964cd555836ca8659dd9290ddc",
+          "tokens": 2048,
+          "vectors": 32
+        },
+        {
+          "calls": 1,
+          "case": "doc256-b8",
+          "gemma_packs": 1,
+          "llama_packs": 1,
+          "text_sha256": "b7ffdc0b63b314a8419e58f649a8007c97ef609da662bced03827ac6ee948c3e",
+          "token_lengths": [
+            256,
+            256,
+            256,
+            256,
+            256,
+            256,
+            256,
+            256
+          ],
+          "token_sha256": "9eadd77a31899008e753e4d295fcd5f781b36115de687114599567b48ed07cce",
+          "tokens": 2048,
+          "vectors": 8
+        },
+        {
+          "calls": 1,
+          "case": "doc1024-b8",
+          "gemma_packs": 1,
+          "llama_packs": 4,
+          "text_sha256": "deafb7c3ace61535a30498e4c884b21baecb668d67fa59a24b74d5ad5fa384d9",
+          "token_lengths": [
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024,
+            1024
+          ],
+          "token_sha256": "08c477481c37bbca54a9d496d30180ed839ca777d4509f78574bef736ab9cebb",
+          "tokens": 8192,
+          "vectors": 8
+        }
+      ]
+    }
+  },
+  "hardware": {
+    "chip": "Apple M3 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gib": 128
+  },
+  "llama_cpp": {
+    "build": 11716,
+    "commit": "797de63b2",
+    "ggml_version": "0.27.0",
+    "gpu_offload": "all model layers, Metal",
+    "interface": "in-process C and mtmd APIs",
+    "version": "0.7.0-dev"
+  },
+  "measurement_date_utc": "2026-10-27",
+  "method": {
+    "estimator": "median llama.cpp wall seconds / median native wall seconds within the same run",
+    "excluded": [
+      "model and context loading",
+      "disk input reads",
+      "warmups",
+      "proof validation",
+      "record writing"
+    ],
+    "execution": "Serial GPU work, interleaved arms, resident models. Shared-desktop drift retained. No replacement of complete slow runs.",
+    "runs_per_campaign": 3,
+    "samples_per_arm_per_case_per_run": 7
+  },
+  "model": {
+    "mmproj_sha256": "c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
+    "name": "EmbeddingGemma 2",
+    "output_dimensions": 768,
+    "quantization": "Q8_0",
+    "weights_sha256": "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135"
+  },
+  "schema": 1,
+  "source_event_sha256": {
+    "audio/final-001-1": "c2132c1e430f0c65891d7dc907be85859fcd237f3bf0becfe4d93ba3a1726ba4",
+    "audio/final-001-2": "3a3fd0796c242585674f037be8cbd56853ef406bd021925ea81ac371a1463d41",
+    "audio/final-001-3": "54b82791b72606529ff7cef02580ead3f8333d6c73f7bcaddeb063f139e40525",
+    "image/final-001-1": "a9d701c261bd829d95cbcb5a44bb45344daf06a743d30b6483748a53bf20109e",
+    "image/final-001-2": "f249a663f5b1cef6774fdc2814237f4008a46599996cd64aae2e230937b4ae07",
+    "image/final-001-3": "33553ed38ce9bd981f66be6cdfb11c5404d0deaa53b32433f23a4b3e13a94b8f",
+    "merged_text/frozen-final-1.jsonl": "1a8550d2f9085919a5c1e4961955e4dc3157bb6d15d0f6142189760715692343",
+    "merged_text/frozen-final-2.jsonl": "3a5347987a1b459956087e891e1c7afcbcae9ae7bcbc756ef12ae68bdf11fb0a",
+    "merged_text/frozen-final-3.jsonl": "416f3833076d459f77f692750f44bfb3aa50b63e3921ea5e746423c10cdff73b",
+    "short_text/final-repeat-1.jsonl": "5a4679fb819badecbc7ac4c56ba46fb315739295fc8cc24a50993a061c86b864",
+    "short_text/final-repeat-2.jsonl": "7559e656ba162de8d77558f135996742c42bd3d083f8be43cfd45b8a046b9e61",
+    "short_text/final-repeat-3.jsonl": "2ff7281ddbd57e459817134a4235fc5a1d3283508e6218a6a264d40606a24f07"
+  },
+  "source_result_sha256": {
+    "audio-optimization-results.json": "7c129ace7d099c38752a7a8c09f9d888005c2a29610747d8bd4ddff612e3de54",
+    "batch-optimization-results.json": "e87e70dc575036c65d3503e6ffd083305eeeca46519d67751d917dffa238f540",
+    "image-optimization-results.json": "7a43fb96fddf18fbd108af42b89e402b413bae2adf295828679b73e0d8d96e32",
+    "standalone-optimization-results.json": "3fb8c118ea4627729895df3422da9ff5f35c2997f783aebb646bd9ad4c84ff14"
+  }
+}
