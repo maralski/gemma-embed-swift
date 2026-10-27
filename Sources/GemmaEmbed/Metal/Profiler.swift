@@ -36,7 +36,7 @@ public enum Profiler {
         func time(_ name: String, note: String, _ body: (Kernels) throws -> Void) throws {
             guard let cb = forward.context.queue.makeCommandBuffer(), let enc = cb.makeComputeCommandEncoder() else { return }
             enc.useResource(forward.weightBuffer, usage: .read)
-            let k = Kernels(forward: forward, encoder: enc)
+            let k = Kernels(forward: forward, encoder: enc, domain: .pureText)
             for _ in 0..<reps { try body(k) }
             enc.endEncoding()
             cb.commit()

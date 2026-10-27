@@ -132,6 +132,37 @@ public struct GemmTile: Sendable, Hashable, Codable {
     var threads: Int { simdgroups * 32 }
 }
 
+enum BatchRegisterGemmTile: CaseIterable, Equatable, Sendable {
+    case rows32Columns32
+    case rows32Columns64
+
+    var tile: GemmTile {
+        switch self {
+        case .rows32Columns32: GemmTile(rows: 32, columns: 32, depth: 32, simdgroups: 4)
+        case .rows32Columns64: GemmTile(rows: 32, columns: 64, depth: 32, simdgroups: 4)
+        }
+    }
+}
+
+enum BatchRegisterGemmPolicy: Equatable, Sendable {
+    case automatic
+    case staged
+    case fixed(BatchRegisterGemmTile)
+
+    func tile(rows: Int) -> BatchRegisterGemmTile? {
+        switch self {
+        case .automatic:
+            switch rows {
+            case 64...512: .rows32Columns32
+            case 513...2048: .rows32Columns64
+            default: nil
+            }
+        case .staged: nil
+        case .fixed(let tile): tile
+        }
+    }
+}
+
 /// Kernel configuration the forward pass runs with. Autotune may replace the defaults.
 public struct KernelSchedule: Sendable, Hashable, Codable {
     /// Tile for GEMMs larger than every bound in `smallGemmTiles`; autotune picks it.
