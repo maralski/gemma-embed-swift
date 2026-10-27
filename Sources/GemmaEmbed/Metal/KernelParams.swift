@@ -101,6 +101,7 @@ public struct GemmTile: Sendable, Hashable, Codable {
     public static let `default` = GemmTile(rows: 64, columns: 64, depth: 16, simdgroups: 2)
     /// Every compiled tile; the tests check all of them.
     public static let compiled = [
+        GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2),
         GemmTile(rows: 32, columns: 32, depth: 32, simdgroups: 4),
         GemmTile(rows: 32, columns: 64, depth: 32, simdgroups: 4),
         GemmTile(rows: 64, columns: 32, depth: 32, simdgroups: 4),
@@ -181,6 +182,9 @@ public struct KernelSchedule: Sendable, Hashable, Codable {
     }
 
     func gemmTile(rows: Int, outputs: Int, inputs: Int) -> GemmTile {
+        if rows <= 16, outputs % 16 == 0, inputs % 32 == 0 {
+            return GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2)
+        }
         let long = Self.longInnerGemmTile
         if inputs > Self.longestTextInnerDimension && rows * outputs > Self.longInnerMinOutputElements && rows % long.rows == 0 && outputs % long.columns == 0 {
             return long

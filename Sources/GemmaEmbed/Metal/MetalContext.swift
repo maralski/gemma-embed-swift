@@ -40,6 +40,44 @@ final class MetalContext: @unchecked Sendable {
         } catch {
             throw GemmaEmbedError.shaderCompilation(String(describing: error))
         }
+        try validateFragmentLayout()
+    }
+
+    private func validateFragmentLayout() throws {
+        let probe = try pipeline("validate_float8x8_fragment_layout")
+        guard probe.threadExecutionWidth == 32 else {
+            throw GemmaEmbedError.gpuFailure("unsupported SIMD layout: float8x8 fragments require a 32-thread SIMD group, got width \(probe.threadExecutionWidth)")
+        }
+        let expected: [Float] = [
+            0, 1, 2, 3, 4, 5, 6, 7,
+            8, 9, 10, 11, 12, 13, 14, 15,
+            16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+            32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47,
+            48, 49, 50, 51, 52, 53, 54, 55,
+            56, 57, 58, 59, 60, 61, 62, 63,
+        ]
+        let output = try makeBuffer(array: [Float](repeating: -1, count: expected.count), label: "fragment layout validation")
+        guard let cb = queue.makeCommandBuffer(), let enc = cb.makeComputeCommandEncoder() else {
+            throw GemmaEmbedError.gpuFailure("cannot encode float8x8 fragment layout validation")
+        }
+        enc.setComputePipelineState(probe)
+        enc.setBuffer(output, offset: 0, index: 0)
+        enc.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 32, height: 1, depth: 1))
+        enc.endEncoding()
+        cb.commit()
+        cb.waitUntilCompleted()
+        if let error = cb.error {
+            throw GemmaEmbedError.gpuFailure("float8x8 fragment layout validation failed: \(error)")
+        }
+        guard cb.status == .completed else {
+            throw GemmaEmbedError.gpuFailure("float8x8 fragment layout validation did not complete")
+        }
+        let actual = output.array(of: Float.self, count: expected.count)
+        for i in expected.indices where actual[i] != expected[i] {
+            throw GemmaEmbedError.gpuFailure("unsupported float8x8 fragment ownership: index \(i) expected \(expected[i]), got \(actual[i])")
+        }
     }
 
     static let resourceBundleName = "GemmaEmbed_GemmaEmbed.bundle"

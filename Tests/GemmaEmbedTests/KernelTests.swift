@@ -115,6 +115,159 @@ final class KernelTests: XCTestCase {
         XCTAssertGreaterThan(env.context.library.functionNames.count, 10)
     }
 
+    func testRegisterQ8GemmMatchesStagedGemmBitForBit() throws {
+        let env = try XCTUnwrap(Self.env)
+        var rng = SeededRandom(seed: 91)
+        let l0 = env.weights.layers[0], l5 = env.weights.layers[5]
+        let cases: [(WeightTensor, Int)] = [
+            (l0.wq, 0), (l0.wk, 0), (l0.wv, 0), (l0.wo, 0), (l0.wGate, 0), (l0.wUp, 0),
+            (l0.wDown, 0), (l0.inpGate, 0), (l0.proj, 0),
+            (l5.wq, 0), (l5.wk, 0), (l5.wo, 0),
+            (env.weights.output, 0), (env.weights.perLayerProj, 7 * env.config.info.perLayerInputSize),
+        ]
+        let tile = GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2)
+        for (weight, rowOffset) in cases where weight.type == .q8_0 {
+            let inputs = weight.columns
+            let outputs = rowOffset == 0 ? weight.rows : env.config.info.perLayerInputSize
+            for rows in [1, 8, 13, 16] {
+                let padded = (rows + 7) / 8 * 8
+                let x = try buffer(rng.floats(padded * inputs, scale: 2))
+                let aux = try buffer(rng.floats(padded * outputs, scale: 4))
+                for epilogue in [Kernels.Epilogue.store, .geglu(gate: aux), .geluTimes(factor: aux)] {
+                    let count = (padded + 2) * outputs
+                    let candidate = try buffer([Float](repeating: -777, count: count))
+                    let original = try buffer([Float](repeating: -777, count: count))
+                    try run { k in
+                        XCTAssertTrue(k.usesRegisterQ8Gemm(weight: weight, rows: rows, tile: tile, requestedTile: nil, epilogue: epilogue))
+                        try k.gemm(x, weight: weight, weightRowOffset: rowOffset, out: candidate, outRowOffset: 1,
+                                   rows: rows, outputs: outputs, inputs: inputs, epilogue: epilogue)
+                        try k.gemm(x, weight: weight, weightRowOffset: rowOffset, out: original, outRowOffset: 1,
+                                   rows: rows, outputs: outputs, inputs: inputs, tile: tile, epilogue: epilogue)
+                    }
+                    XCTAssertEqual(candidate.array(of: Float.self, count: count).map(\.bitPattern),
+                                   original.array(of: Float.self, count: count).map(\.bitPattern),
+                                   "\(weight.info.name), rows \(rows), \(epilogue)")
+                    XCTAssertEqual(candidate.array(of: Float.self, count: outputs), [Float](repeating: -777, count: outputs))
+                    XCTAssertEqual(candidate.array(of: Float.self, count: outputs, offset: (padded + 1) * outputs * 4),
+                                   [Float](repeating: -777, count: outputs))
+                }
+            }
+        }
+    }
+
+    func testRegisterQ8GemmMatchesStagedGemmWithRealActivations() throws {
+        let env = try XCTUnwrap(Self.env)
+        let tokens = try TestSupport.tokenFixtures().flatMap { $0.tokens }
+        var batch = PackedBatch()
+        batch.append(Array(tokens.prefix(13)))
+        _ = try env.forward.run(batch)
+        let ws = try env.forward.workspace(forRows: 13)
+        let layer = env.weights.layers.last!
+        let gate = try buffer([Float](repeating: 0, count: 16 * layer.wGate.rows))
+        try run { k in
+            try k.gemm(ws.h, weight: layer.wGate, out: gate, rows: 13, outputs: layer.wGate.rows, inputs: layer.wGate.columns)
+        }
+        let cases: [(WeightTensor, MTLBuffer, Kernels.Epilogue)] = [
+            (layer.wq, ws.h, .store), (layer.wk, ws.h, .store), (layer.wv, ws.h, .store),
+            (layer.wo, ws.attn, .store), (layer.wGate, ws.h, .store),
+            (layer.wUp, ws.h, .geglu(gate: gate)), (layer.wDown, ws.up, .store),
+            (layer.inpGate, ws.x, .geluTimes(factor: ws.ple)), (layer.proj, ws.tmp, .store),
+            (env.weights.output, ws.h, .store),
+        ]
+        let tile = GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2)
+        for (weight, x, epilogue) in cases where weight.type == .q8_0 {
+            let count = 16 * weight.rows
+            let candidate = try buffer([Float](repeating: 0, count: count))
+            let original = try buffer([Float](repeating: 0, count: count))
+            try run { k in
+                try k.gemm(x, weight: weight, out: candidate, rows: 13, outputs: weight.rows, inputs: weight.columns, epilogue: epilogue)
+                try k.gemm(x, weight: weight, out: original, rows: 13, outputs: weight.rows, inputs: weight.columns, tile: tile, epilogue: epilogue)
+            }
+            XCTAssertEqual(candidate.array(of: Float.self, count: count).map(\.bitPattern),
+                           original.array(of: Float.self, count: count).map(\.bitPattern), weight.info.name)
+        }
+    }
+
+    func testRegisterQ8GemmSelectionKeepsFallbacks() throws {
+        let env = try XCTUnwrap(Self.env)
+        let weight = env.weights.layers[0].wq
+        let tile = GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2)
+        let mediaBuffer = try buffer([0])
+        try run { k in
+            XCTAssertTrue(k.usesRegisterQ8Gemm(weight: weight, rows: 13, tile: tile, requestedTile: nil, epilogue: .store))
+            for rows in [0, 17, 64] {
+                XCTAssertFalse(k.usesRegisterQ8Gemm(weight: weight, rows: rows, tile: tile, requestedTile: nil, epilogue: .store))
+            }
+            XCTAssertFalse(k.usesRegisterQ8Gemm(weight: weight, rows: 13, tile: tile, requestedTile: tile, epilogue: .store))
+            XCTAssertFalse(k.usesRegisterQ8Gemm(weight: weight, rows: 13, tile: GemmTile(rows: 32, columns: 32, depth: 32, simdgroups: 4), requestedTile: nil, epilogue: .store))
+            XCTAssertFalse(k.usesRegisterQ8Gemm(weight: weight, rows: 13, tile: tile, requestedTile: nil, epilogue: .gegluQuick(gate: mediaBuffer)))
+            for nonQ8 in [env.weights.perLayerProj, env.weights.output] where nonQ8.type != .q8_0 {
+                XCTAssertFalse(k.usesRegisterQ8Gemm(weight: nonQ8, rows: 13, tile: tile, requestedTile: nil, epilogue: .store))
+            }
+            let media = Kernels(forward: env.forward, encoder: k.encoder, weights: mediaBuffer)
+            XCTAssertFalse(media.usesRegisterQ8Gemm(weight: weight, rows: 13, tile: tile, requestedTile: nil, epilogue: .store))
+        }
+    }
+
+    func testFusedRegisterGegluMatchesTwoGemmsExactly() throws {
+        let env = try XCTUnwrap(Self.env)
+        var rng = SeededRandom(seed: 22)
+        for layer in [0, 5, env.weights.layers.count - 1] {
+            let w = env.weights.layers[layer]
+            let K = w.wGate.columns
+            for rows in [1, 8, 9, 13, 16] {
+                let padded = (rows + 7) / 8 * 8
+                let x = rng.floats(padded * K, scale: 4)
+                try assertFusedRegisterGeglu(x, rows: rows, layer: layer, message: "random layer \(layer), \(rows) rows")
+            }
+        }
+    }
+
+    func testFusedRegisterGegluMatchesTwoGemmsOnRealActivationsExactly() throws {
+        let env = try XCTUnwrap(Self.env)
+        let body = try TestSupport.tokenFixtures().flatMap { $0.tokens.dropFirst().dropLast() }
+        let tokens = Array(body.prefix(13))
+        let layers = [0, 5, env.weights.layers.count - 1]
+        var activations: [Int: [Float]] = [:]
+        _ = env.reference.forward(tokens: tokens) { name, values in
+            for layer in layers where name == "ffn_norm-\(layer)" { activations[layer] = values }
+        }
+        for layer in layers {
+            let K = env.weights.layers[layer].wGate.columns
+            let x = try XCTUnwrap(activations[layer]) + [Float](repeating: 0, count: 3 * K)
+            try assertFusedRegisterGeglu(x, rows: tokens.count, layer: layer, message: "real FFN input at layer \(layer)")
+        }
+    }
+
+    private func assertFusedRegisterGeglu(_ x: [Float], rows: Int, layer: Int, message: String,
+                                  file: StaticString = #filePath, line: UInt = #line) throws {
+        let env = try XCTUnwrap(Self.env)
+        let w = env.weights.layers[layer]
+        let K = w.wGate.columns, N = w.wGate.rows
+        let padded = (rows + 7) / 8 * 8
+        XCTAssertEqual(x.count, padded * K, file: file, line: line)
+        let xb = try buffer(x)
+        let gate = try buffer([Float](repeating: 0, count: padded * N))
+        let staged = try buffer([Float](repeating: -777, count: padded * N + 16))
+        let original = try buffer([Float](repeating: -777, count: padded * N + 16))
+        let got = try buffer([Float](repeating: -777, count: padded * N + 16))
+        let tile = GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2)
+        try run { k in
+            try k.gemm(xb, weight: w.wGate, out: gate, rows: rows, outputs: N, inputs: K, tile: tile)
+            try k.gemm(xb, weight: w.wUp, out: staged, rows: rows, outputs: N, inputs: K, tile: tile, epilogue: .geglu(gate: gate))
+            try k.gemm(xb, weight: w.wGate, out: gate, rows: rows, outputs: N, inputs: K)
+            try k.gemm(xb, weight: w.wUp, out: original, rows: rows, outputs: N, inputs: K, epilogue: .geglu(gate: gate))
+            try k.gemmGeglu(xb, gate: w.wGate, up: w.wUp, out: got, rows: rows, outputs: N, inputs: K)
+        }
+        let actual = got.array(of: Float.self, count: padded * N + 16).map(\.bitPattern)
+        XCTAssertEqual(actual, staged.array(of: Float.self, count: padded * N + 16).map(\.bitPattern),
+                       "staged: \(message)", file: file, line: line)
+        XCTAssertEqual(actual, original.array(of: Float.self, count: padded * N + 16).map(\.bitPattern),
+                       "register: \(message)", file: file, line: line)
+        XCTAssertEqual(got.array(of: Float.self, count: 16, offset: padded * N * 4),
+                       [Float](repeating: -777, count: 16), "output guard: \(message)", file: file, line: line)
+    }
+
     func testGemmAllModelShapesAndTiles() throws {
         let env = try XCTUnwrap(Self.env)
         var rng = SeededRandom(seed: 1)

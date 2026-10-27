@@ -750,6 +750,16 @@ struct PoolPatchParams {
     float scale;
 };
 
+kernel void validate_float8x8_fragment_layout(device float* output [[buffer(0)]],
+                                             uint lane [[thread_index_in_simdgroup]]) {
+    const uint fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+    const uint fn = ((lane / 4) & 2) * 2 + (lane % 2) * 2;
+    simdgroup_float8x8 matrix;
+    matrix.thread_elements()[0] = float(fm * 8 + fn);
+    matrix.thread_elements()[1] = float(fm * 8 + fn + 1);
+    simdgroup_store(matrix, output, 8);
+}
+
 """#,
 "Elementwise.metal": #"""
 // Copyright 2026 Peter Marelas
@@ -1323,6 +1333,121 @@ GEMM_TILE("64x64x16s2", 64, 64, 16, 2)
 GEMM_TILE("16x32x16s4", 16, 32, 16, 4)
 GEMM_TILE("16x32x16s2", 16, 32, 16, 2)
 GEMM_TILE("64x128x16s4", 64, 128, 16, 4)
+
+GEMM_TILE("8x16x32s2", 8, 16, 32, 2)
+
+// Each lane owns (fm, fn) and (fm, fn + 1) in every 8x8 fragment.
+template <typename Epi>
+kernel void gemm_q8_register_kernel(device const float* X [[buffer(0)]],
+                                    device const uchar* W [[buffer(1)]],
+                                    device float* Y [[buffer(2)]],
+                                    constant GemmParams& p [[buffer(3)]],
+                                    device const float* aux [[buffer(4)]],
+                                    uint2 tgid [[threadgroup_position_in_grid]],
+                                    uint tid [[thread_index_in_threadgroup]],
+                                    uint sgid [[simdgroup_index_in_threadgroup]],
+                                    uint lane [[thread_index_in_simdgroup]]) {
+    const uint fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+    const uint fn = ((lane / 4) & 2) * 2 + (lane % 2) * 2;
+    const uint m0 = tgid.y * 8;
+    const uint n0 = tgid.x * 16 + sgid * 8;
+    simdgroup_float8x8 acc(0.0f);
+
+    for (uint k0 = 0; k0 < p.K; k0 += 32) {
+        device const uchar* w0 = W + (n0 + fn) * p.weightRowBytes + (k0 / 32) * Q8_BLOCK_BYTES;
+        device const uchar* w1 = w0 + p.weightRowBytes;
+        const float scale0 = f16_to_float(ushort(w0[0]) | (ushort(w0[1]) << 8));
+        const float scale1 = f16_to_float(ushort(w1[0]) | (ushort(w1[1]) << 8));
+        #pragma clang loop unroll(full)
+        for (uint kk = 0; kk < 32; kk += 8) {
+            simdgroup_float8x8 a;
+            simdgroup_float8x8 b;
+            const float2 x = *(device const float2*)(X + (m0 + fm) * p.K + k0 + kk + fn);
+            a.thread_elements()[0] = x.x;
+            a.thread_elements()[1] = x.y;
+            // B is W transposed: fragment row fm is K, column fn is an output row.
+            b.thread_elements()[0] = scale0 * float(as_type<char>(w0[2 + kk + fm]));
+            b.thread_elements()[1] = scale1 * float(as_type<char>(w1[2 + kk + fm]));
+            simdgroup_multiply_accumulate(acc, a, b, acc);
+        }
+    }
+
+    threadgroup float output[8 * 20];
+    simdgroup_store(acc, output + sgid * 8, 20);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid < 32) {
+        const uint row = tid / 4, c4 = tid % 4;
+        threadgroup const float* src = output + row * 20 + c4 * 4;
+        const uint index = (m0 + row) * p.N + tgid.x * 16 + c4 * 4;
+        const float4 v = float4(src[0], src[1], src[2], src[3]);
+        *(device float4*)(Y + index) = Epi::apply(v, aux, index);
+    }
+}
+
+#define GEMM_Q8_REGISTER_VARIANT(NAME, EPI) \
+    template [[host_name(NAME)]] kernel void gemm_q8_register_kernel<EPI>( \
+        device const float*, device const uchar*, device float*, constant GemmParams&, device const float*, uint2, uint, uint, uint);
+
+GEMM_Q8_REGISTER_VARIANT("gemm_q8_register_8x16x32s2", EpiStore)
+GEMM_Q8_REGISTER_VARIANT("gemm_q8_geglu_register_8x16x32s2", EpiGeglu)
+GEMM_Q8_REGISTER_VARIANT("gemm_q8_gelutimes_register_8x16x32s2", EpiGeluTimes)
+
+kernel void gemm_q8_dual_geglu_register_8x16x32s2(
+    device const float* X [[buffer(0)]],
+    device const uchar* Wgate [[buffer(1)]],
+    device float* Y [[buffer(2)]],
+    constant GemmParams& p [[buffer(3)]],
+    device const uchar* Wup [[buffer(4)]],
+    uint2 tgid [[threadgroup_position_in_grid]],
+    uint tid [[thread_index_in_threadgroup]],
+    uint sgid [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+    const uint fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+    const uint fn = ((lane / 4) & 2) * 2 + (lane % 2) * 2;
+    const uint m0 = tgid.y * 8;
+    const uint n0 = tgid.x * 16 + sgid * 8;
+    simdgroup_float8x8 gate(0.0f), up(0.0f);
+
+    for (uint k0 = 0; k0 < p.K; k0 += 32) {
+        const uint offset = (n0 + fn) * p.weightRowBytes + (k0 / 32) * Q8_BLOCK_BYTES;
+        device const uchar* g0 = Wgate + offset;
+        device const uchar* g1 = g0 + p.weightRowBytes;
+        device const uchar* u0 = Wup + offset;
+        device const uchar* u1 = u0 + p.weightRowBytes;
+        const float gs0 = f16_to_float(ushort(g0[0]) | (ushort(g0[1]) << 8));
+        const float gs1 = f16_to_float(ushort(g1[0]) | (ushort(g1[1]) << 8));
+        const float us0 = f16_to_float(ushort(u0[0]) | (ushort(u0[1]) << 8));
+        const float us1 = f16_to_float(ushort(u1[0]) | (ushort(u1[1]) << 8));
+        #pragma clang loop unroll(full)
+        for (uint kk = 0; kk < 32; kk += 8) {
+            simdgroup_float8x8 a, g, u;
+            const float2 x = *(device const float2*)(X + (m0 + fm) * p.K + k0 + kk + fn);
+            a.thread_elements()[0] = x.x;
+            a.thread_elements()[1] = x.y;
+            g.thread_elements()[0] = gs0 * float(as_type<char>(g0[2 + kk + fm]));
+            g.thread_elements()[1] = gs1 * float(as_type<char>(g1[2 + kk + fm]));
+            u.thread_elements()[0] = us0 * float(as_type<char>(u0[2 + kk + fm]));
+            u.thread_elements()[1] = us1 * float(as_type<char>(u1[2 + kk + fm]));
+            simdgroup_multiply_accumulate(gate, a, g, gate);
+            simdgroup_multiply_accumulate(up, a, u, up);
+        }
+    }
+
+    constexpr uint OUT_LD = 20, OUT_SIZE = 8 * OUT_LD;
+    threadgroup float output[2 * OUT_SIZE];
+    simdgroup_store(gate, output + sgid * 8, OUT_LD);
+    simdgroup_store(up, output + OUT_SIZE + sgid * 8, OUT_LD);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid < 32) {
+        const uint row = tid / 4, c4 = tid % 4;
+        threadgroup const float* gs = output + row * OUT_LD + c4 * 4;
+        threadgroup const float* us = gs + OUT_SIZE;
+        const float4 g = float4(gs[0], gs[1], gs[2], gs[3]);
+        const float4 u = float4(us[0], us[1], us[2], us[3]);
+        const uint index = (m0 + row) * p.N + tgid.x * 16 + c4 * 4;
+        *(device float4*)(Y + index) = float4(gelu_tanh(g.x), gelu_tanh(g.y), gelu_tanh(g.z), gelu_tanh(g.w)) * u;
+    }
+}
 
 """#,
     ]
