@@ -193,59 +193,27 @@ highest unrelated cosine is 0.822 (the green hills and the sunflower field).
 
 ### Image performance
 
-Measured on 2026-10-25 on the same Apple M3 Max as the text numbers, over 153 social media feed
-pictures of 2026-10-23 (a private corpus, not in the repository; real JPEGs, 480 to 1280 pixels
-wide, 188 vision tokens on average), one picture per GPU batch as the default batching runs
-them, with `gemma-embed --bench-images --batch-size 1` under a GPU lock, three rounds:
+The 27 October 2026 UTC hill climb compared in-process GemmaEmbed and llama.cpp on an Apple
+M3 Max with 40 GPU cores and 128 GiB memory. Both used the same Q8_0 weights and image-token cap.
+Each workload embeds the same eight encoded fixture images, either through eight separate
+calls or one request with automatic batching. Timing includes decoding, resizing, both model
+stages, synchronization, readback and normalization. File reads and model loading are excluded.
 
-| Configuration | Images per second (median of 3) | Seconds for 153 images | GPU seconds |
-|---|---|---|---|
-| GemmaEmbed 0.3.0 | 10.40 | 14.72 | 14.48 |
+Each ratio is llama.cpp's median wall time divided by GemmaEmbed's median wall time. Higher
+values favor GemmaEmbed. Each column is a separate run with seven samples per engine.
 
-Image parity with llama-server is in Image parity
-above (min cosine 0.9999985 over the 30 fixtures). A feed picture takes about 95 ms of GPU time,
-almost all of it the vision tower; the text tower over its rows takes about 3 ms.
+| Workload | Run 1 | Run 2 | Run 3 |
+|---|---:|---:|---:|
+| 8 separate calls, cap 256 | 1.202× | 1.252× | 1.193× |
+| One 8-image request, cap 256 | 1.179× | 1.217× | 1.170× |
+| 8 separate calls, cap 1,120 | 1.239× | 1.273× | 1.247× |
+| One 8-image request, cap 1,120 | 1.234× | 1.243× | 1.254× |
 
-Against llama.cpp, on the same 153 pictures at the same cap of 256, twelve alternating rounds
-on a loaded machine (CPU load moved every figure by a factor of two or more, so treat the ratio
-as approximate). Wall time includes image decoding on the CPU for both engines.
-`scripts/compare_llamacpp.py` reproduces it; [COMPARISON.md](COMPARISON.md) has the details.
-
-| Configuration | Images per second, median of 12 rounds | Range |
-|---|---|---|
-| GemmaEmbed 0.3.0, one image per GPU batch | 8.46 | 4.48 to 11.04 |
-| GemmaEmbed 0.3.0, batched by patch count (`--batch-size auto`) | 7.84 | 3.00 to 11.64 |
-| llama.cpp 0.7.0-dev build 11716, `llama-server --embedding --mmproj`, 1 image per request | 5.91 | 2.87 to 7.91 |
-| llama.cpp, same build, 8 images per request | 6.04 | 3.03 to 8.29 |
-
-The GPU time itself grows with the batch: packing more images into one forward makes the vision
-GEMMs slower, not faster, from 1 to 8 images per batch. The likely cause is the
-activation buffers outgrowing the on-chip cache (a batch of 8 full-size images is 18,432 patch
-rows, and its 3072-wide FFN activations take 226 MB): profiled, a batch of 8 pictures
-runs 17 percent slower than the sum of its kernels timed alone, while one picture runs faster
-than its kernel sum. Budgets of 8192 to 32768 patches measured 4 to 6 percent slower than 4096
-and cost 2 to 4 times the memory. The
-default therefore packs images up to 4096 patch rows per batch, which is one image at the
-default cap and several smaller ones; `ImageEmbedOptions.batchSize` overrides it.
-
-Image encoder load time: 0.24 s on the first load after the file left the page cache (mapping
-and prefaulting the 555 MB file, building the tower), 0.02 s on later loads. Loading the text
-model alone does not open the file.
-
-Reproduce:
-
-```
-export GEMMA_EMBED_WEIGHTS=/path/to/embeddinggemma-2-Q8_0.gguf
-export GEMMA_EMBED_IMAGE_WEIGHTS=/path/to/mmproj-embeddinggemma-2-Q8_0.gguf
-GEMMA_EMBED_TRACE=1 .build/release/gemma-embed --bench-images /path/to/images --runs 5
-.build/release/gemma-embed --profile-images /path/to/images --batch-size 1
-python3 scripts/ab_images.py --a /path/to/old/gemma-embed --b .build/release/gemma-embed --dir /path/to/images
-```
-
-`--profile-images` times each vision kernel class over the first `--batch-size` images, and
-`--bench-images` reports `gpu_seconds_minsum`, every batch's fastest GPU pass summed.
-`scripts/ab_images.py` runs two builds alternately and checks image parity, text parity and that
-the candidate's vectors match the baseline's.
+The final source is `b0e1dd8`. None of the eight image configurations earned retention, and
+none of the twelve final comparisons reached the 1.50× target. These ratios describe the
+existing implementation. The native automatic budget remains 4,096 patch rows.
+See [COMPARISON.md](COMPARISON.md#images) for the settings and limits, and the
+[recorded samples](benchmarks/hillclimb-2026-10-27.json) for all wall times.
 
 ## Audio embeddings
 
@@ -306,32 +274,28 @@ Run `swift test -c release` to reproduce (see Tests), or
 
 ### Audio performance
 
-Measured on 2026-10-26 on the same Apple M3 Max as the text numbers, over 40 spoken clips made by
-macOS `say` (`scripts/make_speech_bench.py`, not in the repository: 715 s in all, 3.3 to 85 s
-each, median 8.7 s), under a GPU lock, at a load average of about 4 to 6. Wall time includes WAV
-decoding and the log-mel front end on the CPU.
+The 27 October 2026 UTC hill climb compared the public audio path with llama.cpp's in-process
+APIs on the same M3 Max. The primary corpus contains eight short and eight long synthetic
+speech clips, spanning 3.4 to 85.1 seconds. Each sample embeds all eight clips of its length,
+through eight separate calls or one request with automatic batching. Timing includes decoding,
+resampling, log-mel preparation, the audio and language stages, readback and normalization.
 
-| Engine | Audio seconds per second, median of 5 rounds | Range |
-|---|---|---|
-| GemmaEmbed, default batching by mel frames | 274.9 | 271.0 to 324.7 |
-| GemmaEmbed, one clip per GPU batch | 235.9 | 225.9 to 271.9 |
-| llama.cpp build 11716, `llama-server --embedding --mmproj`, one clip per request | 153.6 | 148.6 to 160.2 |
+Ratios are llama.cpp median wall time divided by GemmaEmbed median wall time, with seven
+samples per engine in each of three runs.
 
-`scripts/compare_llamacpp_audio.py models/audio/bench 5` reproduces the table; llama-server's side
-includes HTTP and base64, so the gap slightly overstates the difference between the engines. Over
-the same clips the two engines' vectors agree to min cosine 0.9999994.
+| Workload | Run 1 | Run 2 | Run 3 |
+|---|---:|---:|---:|
+| 8 short clips, separate calls | 1.481× | 1.290× | 1.392× |
+| 8 short clips, one request | 1.935× | 2.000× | 1.696× |
+| 8 long clips, separate calls | 1.347× | 1.328× | 1.310× |
+| 8 long clips, one request | 1.430× | 1.370× | 1.367× |
 
-Against the first correct implementation, the speed work made audio embedding 1.34 times faster
-in wall time with default batching and 1.29 times with one clip per batch (interleaved A/B runs
-with `scripts/ab_audio.py`, interquartile range 1.30 to 1.35), with the same vectors to within
-3.4e-7. Most of it came from the CPU: the log-mel front end runs an in-place FFT and sums only the
-non-zero taps of each mel filter (about 1.17 times wall on its own, bit-identical features), and
-the next batch's clips are decoded while the GPU runs the current one. On the GPU, attention runs
-one simdgroup per query and head (12 times faster per layer on long clips) and the second
-subsampling convolution is an implicit GEMM on simdgroup matrices (about 4 percent of GPU time).
-Wall time is now bound by the GPU, and three quarters of that is GEMMs already running near 10
-TFLOPS. Tuning GEMM tiles for the audio shapes, split-K, fusing the elementwise passes, larger or
-smaller batches, and double-buffered command encoding each measured within noise.
+Only the short-batch workload reached 1.50× in all three runs. Ten source configurations were
+measured. No audio optimization was retained for release: the combined candidate passed its
+correctness checks but failed text and image performance guards. The final comparison uses
+the unchanged `b0e1dd8` baseline. Two further frontend ideas remained unmeasured.
+See [COMPARISON.md](COMPARISON.md#audio) for the settings and limits, and the
+[recorded samples](benchmarks/hillclimb-2026-10-27.json) for all wall times.
 
 ### Cross-modal check
 
@@ -441,44 +405,43 @@ regenerates the text fixtures from llama.cpp.
 
 ## Performance
 
-Measured on 2026-10-25 on an Apple M3 Max (40 GPU cores, 128 GB) running macOS 26, Xcode 26.3,
-under a GPU lock with no other GPU work and a load average of 3.3, five runs. The corpus is 285
-social media posts of 2026-10-17, a private set that is not in the repository (gist plus text
-cut at 2000 characters, document prefix), 41,675 tokens in all, 146 tokens per post on average,
-longest 604.
+These results come from the 27 October 2026 UTC hill climbs against the in-process llama.cpp
+C API, using release builds, resident models and full Metal offload. The machine is an Apple
+M3 Max with 16 CPU cores, 40 GPU cores and 128 GiB memory. The comparator is llama.cpp
+0.7.0-dev build 11716, commit `797de63b2`, with the same Q8_0 weights.
 
-| Engine | Posts per second | Seconds for 285 posts | Tokens per second |
-|---|---|---|---|
-| GemmaEmbed 0.3.0 | 176.4 | 1.62 (1.61 to 1.66) | 25,790 |
-| llama.cpp 0.7.0-dev build 11716, `llama-server --embedding -np 8 -ub 8192`, 32 texts per request | 118.3 | 2.41 | 17,300 |
-| llama.cpp, same build, `-np 1` (one sequence at a time) | 59.6 | 4.78 | 8,720 |
+The text results below measure the code merged in [PR #2](https://github.com/maralski/gemma-embed-swift/pull/2),
+following the short-text changes in [PR #1](https://github.com/maralski/gemma-embed-swift/pull/1).
+These tables describe `main` at `b0e1dd8`; the `0.4.0` release predates the text changes.
+Each value is llama.cpp median suite wall time divided by GemmaEmbed median suite wall time
+in one seven-sample run. Higher values favor GemmaEmbed. The query suite makes twelve
+individual calls with 13 to 16 tokens each; its time is not a single-query latency percentile.
 
-GemmaEmbed 0.3.0 is 1.49 times faster than llama.cpp's best configuration and 2.96 times faster
-than its single-slot default, with the same parity (min cosine 0.9999988 against llama.cpp over
-the 40 fixtures). A single 22-token query takes 7.4 ms wall. The GEMMs take most of the GPU time and run at 7.6 to 8.8 TFLOPS fp32
-in a sustained microbench; attention takes about an eighth.
+| Workload | Run 1 | Run 2 | Run 3 |
+|---|---:|---:|---:|
+| 12 queries, pre-tokenized | 1.548× | 1.794× | 1.445× |
+| 12 queries, tokenizer included | 1.528× | 1.413× | 1.521× |
+| One 64-token sequence | 1.973× | 1.964× | 2.137× |
+| 8 × 64-token sequences | 1.414× | 1.375× | 1.535× |
+| 32 × 64-token sequences | 1.461× | 1.317× | 1.272× |
+| 8 × 256-token sequences | 1.391× | 1.306× | 1.223× |
+| 8 × 1,024-token sequences | 1.256× | 1.192× | 1.115× |
 
-Measuring on a shared machine: GPU time of short command buffers reads high because the GPU runs
-at a low clock, so per-kernel lines of `--profile` mislead for kernels under about 2 ms, and a
-microbench of short bursts can rank GEMM tiles the wrong way round. `scripts/ab_bench.py` runs two
-builds alternately and calls a difference only when the median, best-of and per-batch-minimum
-ratios agree; `scripts/gpulock.py` keeps two measurements off the GPU at once.
+Only the row labelled "tokenizer included" includes text tokenization. The other rows start
+with identical token IDs and finish with normalized CPU vectors. The 8,192-token document
+workload uses one native packed call and four llama.cpp packs under the fixed 2,048-token
+batch setting.
 
-Load time: 0.27 s when the Metal shader cache is warm (tokenizer 0.17 s), about 1 s on the first
-load after a build (shader compilation 0.25 s, pipelines 0.3 s). Autotune, when enabled, adds
-about 4 s on the first load and nothing afterwards.
+The earlier short-text series reached 1.50× for pre-tokenized queries in all three runs.
+The later batch series above did not meet that threshold across all four batch workloads.
+All final runs remain reported. Shared-desktop drift moved absolute times, so these are
+workload-specific measurements rather than a universal speed guarantee.
 
-Reproduce:
-
-```
-swift build -c release
-export GEMMA_EMBED_WEIGHTS=/path/to/embeddinggemma-2-Q8_0.gguf
-.build/release/gemma-embed --bench /path/to/posts.json --runs 3
-
-llama-server -m /path/to/embeddinggemma-2-Q8_0.gguf --embedding -c 8192 -b 8192 -ub 8192 -np 8 --port 8092 &
-python3 scripts/bench_llamacpp.py /path/to/posts.json --port 8092 --batch 32 --runs 3
-python3 scripts/ab_bench.py --a /path/to/old/gemma-embed --b .build/release/gemma-embed --bench /path/to/posts.json
-```
+[COMPARISON.md](COMPARISON.md) includes both text series, image and audio results, exact
+comparator settings, timing boundaries and quality checks. The
+[benchmark data](benchmarks/hillclimb-2026-10-27.json) contains every final sample behind those
+tables, with per-run medians and ranges in seconds. Measurements exclude model loading,
+disk input reads, warmups and validation work.
 
 ## Design notes
 
