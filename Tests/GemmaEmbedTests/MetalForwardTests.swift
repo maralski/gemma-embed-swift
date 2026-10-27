@@ -138,6 +138,54 @@ final class MetalForwardTests: XCTestCase {
         }
     }
 
+    func testFusedRegisterGegluSelectionRequiresShortPureText() throws {
+        let forward = try XCTUnwrap(Self.env).forward
+        for count in [1, 8, 9, 13, 16] {
+            XCTAssertTrue(forward.usesFusedTextGeglu(tokenCount: count, hasVectors: false))
+            XCTAssertFalse(forward.usesFusedTextGeglu(tokenCount: count, hasVectors: true))
+        }
+        for count in [0, 17, 32, 64, 97] {
+            XCTAssertFalse(forward.usesFusedTextGeglu(tokenCount: count, hasVectors: false))
+            XCTAssertFalse(forward.usesFusedTextGeglu(tokenCount: count, hasVectors: true))
+        }
+    }
+
+    func testFusedRegisterGegluMatchesReferencePathExactlyAfterWorkspaceReuse() throws {
+        #if DEBUG
+        let env = try XCTUnwrap(Self.env)
+        let forward = env.forward
+        let saved = forward.useFusedTextGeglu
+        defer { forward.useFusedTextGeglu = saved }
+        let body = try TestSupport.tokenFixtures().flatMap { $0.tokens.dropFirst().dropLast() }
+        func batch(_ counts: [Int]) -> PackedBatch {
+            var result = PackedBatch()
+            for count in counts {
+                let tokens: [Int32] = count == 1 ? [env.tokenizer.bosId]
+                    : [env.tokenizer.bosId] + Array(body.prefix(count - 2)) + [env.tokenizer.eosId]
+                result.append(tokens)
+            }
+            return result
+        }
+        let width = forward.config.info.outputDimensions
+        for counts in [[1], [8], [9], [13], [16], [17], [6, 10], [8, 9], [13]] {
+            let subject = batch(counts)
+            forward.useFusedTextGeglu = false
+            let want = try forward.run(subject)
+            let wantRows = try forward.workspace(forRows: subject.tokenCount).out.array(of: Float.self, count: subject.tokenCount * width)
+            _ = try forward.run(batch([97]))
+            forward.useFusedTextGeglu = true
+            let got = try forward.run(subject)
+            let gotRows = try forward.workspace(forRows: subject.tokenCount).out.array(of: Float.self, count: subject.tokenCount * width)
+            XCTAssertEqual(got.map { $0.map(\.bitPattern) }, want.map { $0.map(\.bitPattern) },
+                           "raw pooled vectors for token counts \(counts) after a larger batch reused the workspace")
+            XCTAssertEqual(gotRows.map(\.bitPattern), wantRows.map(\.bitPattern),
+                           "raw token outputs for token counts \(counts) after a larger batch reused the workspace")
+        }
+        #else
+        throw XCTSkip("reference-path comparison uses the internal DEBUG switch")
+        #endif
+    }
+
     func testFullBatchesAndAutotuneUseTheScheduleGemmTile() {
         let schedule = KernelSchedule(gemmTile: GemmTile(rows: 64, columns: 128, depth: 16, simdgroups: 8))
         for rows in [MetalForward.paddedRows(6000), 8192] {

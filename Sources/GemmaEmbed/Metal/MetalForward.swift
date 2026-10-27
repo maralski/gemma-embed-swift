@@ -66,6 +66,9 @@ final class MetalForward: @unchecked Sendable {
     let weightBuffer: MTLBuffer
     var schedule: KernelSchedule
     var dispatchType: MTLDispatchType = .concurrent
+    #if DEBUG
+    var useFusedTextGeglu = true
+    #endif
     /// The image encoder, when one was loaded with the model.
     let vision: VisionTower?
     /// The audio encoder, when one was loaded with the model.
@@ -178,6 +181,15 @@ final class MetalForward: @unchecked Sendable {
 
     static func textGemmRows(_ tokens: Int) -> Int {
         tokens < rowAlignment ? tokens : paddedRows(tokens)
+    }
+
+    func usesFusedTextGeglu(tokenCount: Int, hasVectors: Bool) -> Bool {
+        guard !hasVectors, tokenCount > 0, tokenCount <= 16 else { return false }
+        #if DEBUG
+        return useFusedTextGeglu
+        #else
+        return true
+        #endif
     }
 
     /// Pooled, unnormalised output vectors, one per sequence in the batch. The batch's vector rows
@@ -353,6 +365,7 @@ final class MetalForward: @unchecked Sendable {
         let d = info.hiddenSize
         let N = batch.tokenCount
         let gemmRows = vectors == nil ? MetalForward.textGemmRows(N) : paddedRows
+        let fusedGeglu = usesFusedTextGeglu(tokenCount: N, hasVectors: vectors != nil)
         let eps = info.normEpsilon
         let k = Kernels(forward: self, encoder: enc)
 
@@ -386,8 +399,12 @@ final class MetalForward: @unchecked Sendable {
             try k.gemm(ws.attn, weight: w.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: qDim)
             try k.rmsNormResidualNorm(ws.x, add: ws.tmp, weight: w.postAttnNorm, out: ws.h, outWeight: w.ffnNorm, rows: N, width: d, eps: eps)
 
-            try k.gemm(ws.h, weight: w.wGate, out: ws.gate, rows: gemmRows, outputs: info.feedForwardSize, inputs: d)
-            try k.gemm(ws.h, weight: w.wUp, out: ws.up, rows: gemmRows, outputs: info.feedForwardSize, inputs: d, epilogue: .geglu(gate: ws.gate))
+            if fusedGeglu && w.wGate.type == .q8_0 && w.wUp.type == .q8_0 {
+                try k.gemmGeglu(ws.h, gate: w.wGate, up: w.wUp, out: ws.up, rows: gemmRows, outputs: info.feedForwardSize, inputs: d)
+            } else {
+                try k.gemm(ws.h, weight: w.wGate, out: ws.gate, rows: gemmRows, outputs: info.feedForwardSize, inputs: d)
+                try k.gemm(ws.h, weight: w.wUp, out: ws.up, rows: gemmRows, outputs: info.feedForwardSize, inputs: d, epilogue: .geglu(gate: ws.gate))
+            }
             try k.gemm(ws.up, weight: w.wDown, out: ws.tmp, rows: gemmRows, outputs: d, inputs: info.feedForwardSize)
             try k.rmsNormResidual(ws.x, add: ws.tmp, weight: w.postFfnNorm, rows: N, width: d, eps: eps)
 
@@ -533,6 +550,24 @@ struct Kernels {
               tile == GemmTile(rows: 8, columns: 16, depth: 32, simdgroups: 2) else { return false }
         if case .gegluQuick = epilogue { return false }
         return true
+    }
+
+    /// Short text FFN projection. Buffers hold rows rounded up to eight.
+    func gemmGeglu(_ x: MTLBuffer, gate: WeightTensor, up: WeightTensor, out: MTLBuffer,
+                   rows: Int, outputs: Int, inputs: Int) throws {
+        precondition(rows > 0 && rows <= 16 && outputs % 16 == 0 && inputs % 32 == 0)
+        for weight in [gate, up] {
+            precondition(weight.type == .q8_0 && weight.columns == inputs && weight.rows == outputs)
+        }
+        precondition(gate.rowBytes == up.rowBytes && weights === forward.weightBuffer)
+        let dispatchRows = (rows + 7) / 8 * 8
+        _ = try bind("gemm_q8_dual_geglu_register_8x16x32s2")
+        encoder.setBuffer(x, offset: 0, index: 0)
+        encoder.setBuffer(weights, offset: gate.fileOffset, index: 1)
+        encoder.setBuffer(out, offset: 0, index: 2)
+        setBytes(GemmParams(M: UInt32(dispatchRows), N: UInt32(outputs), K: UInt32(inputs), weightRowBytes: UInt32(gate.rowBytes)), index: 3)
+        encoder.setBuffer(weights, offset: up.fileOffset, index: 4)
+        dispatch(groups: MTLSize(width: outputs / 16, height: dispatchRows / 8, depth: 1), perGroup: MTLSize(width: 64, height: 1, depth: 1))
     }
 
     func gemm3(_ x: MTLBuffer, weights w: (WeightTensor, WeightTensor, WeightTensor), outs: (MTLBuffer, MTLBuffer, MTLBuffer),
