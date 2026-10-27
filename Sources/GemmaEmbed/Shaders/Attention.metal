@@ -22,7 +22,7 @@ inline void stage_tile(threadgroup float* tile, device const float* src, uint st
     }
 }
 
-template <int ATT_DS>
+template <int ATT_DS, bool REGISTER_KEYS = false>
 kernel void attention_kernel(device const float* Q [[buffer(0)]],
                              device const float* K [[buffer(1)]],
                              device const float* V [[buffer(2)]],
@@ -63,8 +63,7 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
     float m = -INFINITY;
     float l = 0.0f;
 
-    // Key range for the whole query block, clipped to the window; every simdgroup walks it
-    // because the K and V tiles are shared.
+    // Key range for the whole query block, clipped to the window.
     uint kStart = 0, kEnd = len;
     if (hw > 0) {
         const int lo = int(w.q0) - int(hw);
@@ -78,15 +77,22 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
         simdgroup_float8x8 s[4];
         for (int j = 0; j < 4; j++) s[j] = simdgroup_float8x8(0.0f);
         for (uint dc = 0; dc < hd; dc += ATT_DC) {
-            threadgroup_barrier(mem_flags::mem_threadgroup);
-            stage_tile(tile, kBase + kb * p.kvStride + dc, p.kvStride, tid, threads);
-            threadgroup_barrier(mem_flags::mem_threadgroup);
+            if (!REGISTER_KEYS) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                stage_tile(tile, kBase + kb * p.kvStride + dc, p.kvStride, tid, threads);
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+            }
             for (int dd = 0; dd < ATT_DC; dd += 8) {
                 simdgroup_float8x8 a;
                 simdgroup_load(a, qBase + dc + dd, p.qStride);
                 for (int j = 0; j < 4; j++) {
                     simdgroup_float8x8 b;
-                    simdgroup_load(b, tile + j * 8 * ATT_LD + dd, ATT_LD, ulong2(0, 0), true);
+                    if (REGISTER_KEYS) {
+                        b.thread_elements()[0] = kBase[(kb + j * 8 + c0) * p.kvStride + dc + dd + r];
+                        b.thread_elements()[1] = kBase[(kb + j * 8 + c0 + 1) * p.kvStride + dc + dd + r];
+                    } else {
+                        simdgroup_load(b, tile + j * 8 * ATT_LD + dd, ATT_LD, ulong2(0, 0), true);
+                    }
                     simdgroup_multiply_accumulate(s[j], a, b, s[j]);
                 }
             }
@@ -171,6 +177,15 @@ kernel void attention_kernel(device const float* Q [[buffer(0)]],
 ATTENTION_VARIANT("attention_fwd", 256)
 ATTENTION_VARIANT("attention_fwd_hd512", 512)
 ATTENTION_VARIANT("attention_fwd_ds128", 128)
+
+#define ATTENTION_REGISTER_KEYS_VARIANT(NAME, DS) \
+    template [[host_name(NAME)]] kernel void attention_kernel<DS, true>( \
+        device const float*, device const float*, device const float*, device float*, \
+        device const AttentionWork*, constant AttentionParams&, threadgroup float*, uint3, uint, uint, uint);
+
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_register_k", 256)
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_hd512_register_k", 512)
+ATTENTION_REGISTER_KEYS_VARIANT("attention_fwd_ds128_register_k", 128)
 
 constant int VIS_QUERIES = 64;
 constant int VIS_THREADS = VIS_QUERIES / 8 * 32;

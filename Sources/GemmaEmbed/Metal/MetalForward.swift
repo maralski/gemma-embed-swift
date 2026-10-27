@@ -66,6 +66,7 @@ final class MetalForward: @unchecked Sendable {
     let weightBuffer: MTLBuffer
     var schedule: KernelSchedule
     var batchRegisterGemmPolicy: BatchRegisterGemmPolicy = .automatic
+    var textAttentionOperandLoading: TextAttentionOperandLoading = .registerKeys
     var dispatchType: MTLDispatchType = .concurrent
     #if DEBUG
     var useFusedTextGeglu = true
@@ -395,7 +396,8 @@ final class MetalForward: @unchecked Sendable {
             }
             try k.attention(q: ws.q, k: ws.k, v: ws.v, out: ws.attn, work: ws.work, workItems: workItems,
                             heads: heads, kvHeads: kvHeads, headDim: hd,
-                            halfWindow: layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1)
+                            halfWindow: layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1,
+                            operandLoading: textAttentionOperandLoading.selected(tokenCount: N, hasVectors: vectors != nil, headDim: hd))
             if layer.index == stopAfterAttention { return }
             try k.gemm(ws.attn, weight: w.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: qDim)
             try k.rmsNormResidualNorm(ws.x, add: ws.tmp, weight: w.postAttnNorm, out: ws.h, outWeight: w.ffnNorm, rows: N, width: d, eps: eps)
@@ -566,7 +568,7 @@ struct Kernels {
                            requestedTile: GemmTile?, epilogue: Epilogue) -> BatchRegisterGemmTile? {
         guard domain == .pureText, weights === forward.weightBuffer, rows >= 64,
               requestedTile == nil, weight.type == .q8_0,
-              let candidate = forward.batchRegisterGemmPolicy.tile(rows: rows),
+              let candidate = forward.batchRegisterGemmPolicy.tile(rows: rows, scheduledTile: forward.schedule.gemmTile),
               outputs % candidate.tile.columns == 0, inputs % candidate.tile.depth == 0 else { return nil }
         if case .gegluQuick = epilogue { return nil }
         return candidate
@@ -665,11 +667,13 @@ struct Kernels {
     }
 
     func attention(q: MTLBuffer, k: MTLBuffer, v: MTLBuffer, out: MTLBuffer, work: MTLBuffer, workItems: Int,
-                   heads: Int, kvHeads: Int, headDim: Int, halfWindow: Int, scale: Float, sliceWidth: Int? = nil) throws {
+                   heads: Int, kvHeads: Int, headDim: Int, halfWindow: Int, scale: Float, sliceWidth: Int? = nil,
+                   operandLoading: TextAttentionOperandLoading = .staged) throws {
         guard workItems > 0 else { return }
         let queries = forward.schedule.attentionQueries(headDim: headDim)
         let sliceWidth = sliceWidth ?? KernelSchedule.attentionSliceWidth(headDim: headDim, threadgroups: workItems * heads)
         let name = [64: "attention_vision", 128: "attention_fwd_ds128", 256: "attention_fwd", 512: "attention_fwd_hd512"][sliceWidth]!
+            + (headDim == 64 ? "" : operandLoading.rawValue)
         precondition(headDim % sliceWidth == 0)
         precondition(headDim != 64 || (kvHeads == heads && halfWindow == 0), "the vision attention kernel has no grouped K/V heads and no window")
         _ = try bind(name)

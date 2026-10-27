@@ -4,7 +4,63 @@ import Metal
 import XCTest
 @testable import GemmaEmbed
 
+final class BatchRegisterGemmPolicyTests: XCTestCase {
+    func testBatchRegisterGemmAutomaticPolicyHonorsCustomSchedulesAndFixedOverrides() {
+        let custom = GemmTile(rows: 32, columns: 64, depth: 16, simdgroups: 4)
+        let boundaries: [(Int, BatchRegisterGemmTile?)] = [
+            (63, nil), (64, .rows32Columns32), (512, .rows32Columns32),
+            (513, .rows32Columns64), (2048, .rows32Columns64), (2049, .rows32Columns128),
+            (6000, .rows32Columns128), (8192, .rows32Columns128),
+        ]
+        for (rows, expected) in boundaries {
+            for queries in [16, 32, 64] {
+                let schedule = KernelSchedule(attentionQueries: queries)
+                XCTAssertEqual(BatchRegisterGemmPolicy.automatic.tile(rows: rows, scheduledTile: schedule.gemmTile), expected)
+            }
+            XCTAssertNil(BatchRegisterGemmPolicy.automatic.tile(rows: rows, scheduledTile: custom))
+            XCTAssertNil(BatchRegisterGemmPolicy.staged.tile(rows: rows, scheduledTile: custom))
+        }
+        XCTAssertEqual(BatchRegisterGemmPolicy.fixed(.rows32Columns128).tile(rows: 6000, scheduledTile: custom), .rows32Columns128)
+        XCTAssertEqual(BatchRegisterGemmPolicy.fixed(.rows32Columns64).tile(rows: 6000, scheduledTile: .default), .rows32Columns64)
+    }
+}
+
 extension KernelTests {
+    func testBatchRegisterGemmCustomScheduleDispatchMatchesExplicitStagedBits() throws {
+        let env = try XCTUnwrap(Self.env)
+        let forward = env.forward
+        let savedPolicy = forward.batchRegisterGemmPolicy
+        let savedSchedule = forward.schedule
+        defer {
+            forward.batchRegisterGemmPolicy = savedPolicy
+            forward.schedule = savedSchedule
+        }
+        let custom = GemmTile(rows: 32, columns: 64, depth: 16, simdgroups: 4)
+        forward.schedule = KernelSchedule(gemmTile: custom)
+        forward.batchRegisterGemmPolicy = .automatic
+        let weight = env.weights.layers[0].wq
+        let rows = MetalForward.paddedRows(6000)
+        let count = (rows + 2) * weight.rows
+        var rng = SeededRandom(seed: 947)
+        let x = try buffer(rng.floats(rows * weight.columns, scale: 2))
+        let actual = try buffer([Float](repeating: -777, count: count))
+        let expected = try buffer([Float](repeating: -777, count: count))
+        try run { general in
+            let text = Kernels(forward: forward, encoder: general.encoder, domain: .pureText)
+            XCTAssertNil(text.batchRegisterTile(weight: weight, rows: rows, outputs: weight.rows, inputs: weight.columns,
+                                                requestedTile: nil, epilogue: .store))
+            XCTAssertEqual(forward.schedule.gemmTile(rows: rows, outputs: weight.rows, inputs: weight.columns), custom)
+            try text.gemm(x, weight: weight, out: actual, outRowOffset: 1,
+                          rows: rows, outputs: weight.rows, inputs: weight.columns)
+            try general.gemm(x, weight: weight, out: expected, outRowOffset: 1,
+                             rows: rows, outputs: weight.rows, inputs: weight.columns, tile: custom)
+        }
+        XCTAssertEqual(actual.array(of: UInt32.self, count: count), expected.array(of: UInt32.self, count: count))
+        XCTAssertEqual(actual.array(of: Float.self, count: weight.rows), [Float](repeating: -777, count: weight.rows))
+        XCTAssertEqual(actual.array(of: Float.self, count: weight.rows, offset: (rows + 1) * weight.rows * 4),
+                       [Float](repeating: -777, count: weight.rows))
+    }
+
     private func batchRegisterShapes() throws -> [(weight: WeightTensor, offset: Int, outputs: Int)] {
         let env = try XCTUnwrap(Self.env)
         let l0 = env.weights.layers[0], l5 = env.weights.layers[5]
@@ -47,7 +103,8 @@ extension KernelTests {
         env.forward.batchRegisterGemmPolicy = .automatic
         let boundaries: [(Int, BatchRegisterGemmTile?)] = [
             (63, nil), (64, .rows32Columns32), (511, .rows32Columns32), (512, .rows32Columns32),
-            (513, .rows32Columns64), (2048, .rows32Columns64), (2049, nil), (8192, nil),
+            (513, .rows32Columns64), (2048, .rows32Columns64),
+            (2049, .rows32Columns128), (8192, .rows32Columns128),
         ]
         var rng = SeededRandom(seed: 915)
         for (weight, offset, outputs) in try batchRegisterShapes() {
@@ -86,6 +143,9 @@ extension KernelTests {
         let expectedSelection = weight.type == .q8_0 && rows >= 64 ? variant : nil
         let tile = expectedSelection?.tile ?? env.forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: weight.columns)
         let padded = (rows + tile.rows - 1) / tile.rows * tile.rows
+        let referenceTile = GemmTile.compiled.contains(tile) ? tile
+            : GemmTile(rows: 32, columns: 64, depth: 16, simdgroups: 4)
+        XCTAssertEqual(padded % referenceTile.rows, 0, file: file, line: line)
         let count = (padded + 2) * outputs
         let candidate = try buffer([Float](repeating: -777, count: count))
         let staged = try buffer([Float](repeating: -777, count: count))
@@ -97,7 +157,7 @@ extension KernelTests {
             try text.gemm(x, weight: weight, weightRowOffset: weightRowOffset, out: candidate, outRowOffset: 1,
                           rows: rows, outputs: outputs, inputs: weight.columns, epilogue: epilogue)
             try general.gemm(x, weight: weight, weightRowOffset: weightRowOffset, out: staged, outRowOffset: 1,
-                             rows: rows, outputs: outputs, inputs: weight.columns, tile: tile, epilogue: epilogue)
+                             rows: padded, outputs: outputs, inputs: weight.columns, tile: referenceTile, epilogue: epilogue)
         }
         let actual = candidate.array(of: UInt32.self, count: count)
         let expected = staged.array(of: UInt32.self, count: count)
@@ -185,6 +245,9 @@ extension MetalForwardTests {
             XCTAssertEqual(actual.map { $0.map(\.bitPattern) }, expected.map { $0.map(\.bitPattern) },
                            "automatic packed batch with \(count) rows")
             XCTAssertEqual(actualRows, expectedRows, "automatic raw token outputs for \(count) rows")
+            XCTAssertEqual(actual.map { Self.normalised($0).map(\.bitPattern) },
+                           expected.map { Self.normalised($0).map(\.bitPattern) },
+                           "automatic normalised pooled outputs for \(count) rows")
             XCTAssertEqual(actual.last!.map(\.bitPattern), single.map(\.bitPattern),
                            "subject output after \(count - subject.count) unrelated packed tokens")
         }
@@ -199,8 +262,13 @@ extension MetalForwardTests {
         let body = try TestSupport.tokenFixtures().flatMap { $0.tokens.dropFirst().dropLast() }
         let width = forward.config.info.outputDimensions
         for lengths in [[Int](repeating: 1024, count: 8), [13, 64, 512, 1024, 2048, 4096, 435]] {
-            let sequences = lengths.enumerated().map { index, length in
-                (0..<length).map { body[(index * 127 + $0) % body.count] }
+            var sequences: [[Int32]] = []
+            for (index, length) in lengths.enumerated() {
+                var tokens: [Int32] = []
+                for position in 0..<length {
+                    tokens.append(body[(index * 127 + position) % body.count])
+                }
+                sequences.append(tokens)
             }
             var batch = PackedBatch()
             for tokens in sequences { batch.append(tokens) }

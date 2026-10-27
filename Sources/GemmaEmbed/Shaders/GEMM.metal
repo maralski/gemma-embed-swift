@@ -352,6 +352,7 @@ kernel void gemm_q8_batch_register_kernel(device const float* X [[buffer(0)]],
 
 GEMM_Q8_BATCH_REGISTER_TILE("32x32x32s4", 32, 32, 4)
 GEMM_Q8_BATCH_REGISTER_TILE("32x64x32s4", 32, 64, 4)
+GEMM_Q8_BATCH_REGISTER_TILE("32x128x32s4", 32, 128, 4)
 
 kernel void gemm_q8_dual_geglu_register_8x16x32s2(
     device const float* X [[buffer(0)]],

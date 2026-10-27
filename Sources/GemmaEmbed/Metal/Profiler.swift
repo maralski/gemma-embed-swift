@@ -62,10 +62,10 @@ public enum Profiler {
 
         let l0 = weights.layers[0], l5 = weights.layers[5]
         try time("gemm q8 512->1024 (q, sliding)", note: "20 sliding layers") { k in try k.gemm(ws.h, weight: l0.wq, out: ws.q, rows: gemmRows, outputs: 1024, inputs: d) }
-        try time("gemm q8 512->512 (k/v/gate/proj)", note: "x6 per layer") { k in try k.gemm(ws.h, weight: l0.wk, out: ws.k, rows: gemmRows, outputs: 512, inputs: d) }
+        try time("gemm q8 512->512 (k/v/inpGate/proj)", note: "x4 per layer") { k in try k.gemm(ws.h, weight: l0.wk, out: ws.k, rows: gemmRows, outputs: 512, inputs: d) }
         try time("gemm q8 1024->512 (o, sliding)", note: "") { k in try k.gemm(ws.attn, weight: l0.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: 1024) }
         try time("gemm q8 512->2048 (ffn gate/up)", note: "x2 per layer") { k in try k.gemm(ws.h, weight: l0.wGate, out: ws.gate, rows: gemmRows, outputs: 2048, inputs: d) }
-        try time("gemm q8 2048->512 (ffn down)", note: "") { k in try k.gemm(ws.gate, weight: l0.wDown, out: ws.tmp, rows: gemmRows, outputs: d, inputs: 2048) }
+        try time("gemm q8 2048->512 (ffn down)", note: "") { k in try k.gemm(ws.up, weight: l0.wDown, out: ws.tmp, rows: gemmRows, outputs: d, inputs: 2048) }
         try time("gemm q8 512->2048 (q, global)", note: "x4 layers") { k in try k.gemm(ws.h, weight: l5.wq, out: ws.q, rows: gemmRows, outputs: 2048, inputs: d) }
         try time("gemm bf16 512->512 (per-layer proj)", note: "") { k in try k.gemm(ws.x0, weight: weights.perLayerProj, weightRowOffset: 0, out: ws.tmp, rows: gemmRows, outputs: 512, inputs: d) }
         try time("rmsnorm 512", note: "x1 per layer") { k in try k.rmsNorm(ws.x, out: ws.h, weight: l0.attnNorm, rows: N, width: d, eps: eps) }
@@ -78,7 +78,8 @@ public enum Profiler {
             try time(s.name, note: s.note) { k in
                 try k.attention(q: s.q, k: s.k, v: s.v, out: ws.attn, work: ws.work, workItems: work.count, heads: info.headCount,
                                 kvHeads: s.layer.kvHeadCount, headDim: s.layer.headDim,
-                                halfWindow: s.layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1)
+                                halfWindow: s.layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1,
+                                operandLoading: forward.textAttentionOperandLoading.selected(tokenCount: N, hasVectors: false, headDim: s.layer.headDim))
             }
         }
         try time("mean pool", note: "") { k in try k.meanPool(ws.out, sequences: ws.sequences, count: batch.sequences.count, out: ws.pooled, width: 768) }
