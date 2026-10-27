@@ -96,6 +96,29 @@ final class MetalForwardTests: XCTestCase {
         XCTAssertEqual(differing, 0, "a text's vector must not depend on the tile its batch size picks; max abs diff \(TestSupport.maxAbsDiff(single, inBatch))")
     }
 
+    func testSmallTextBatchesMatchLargerBatchesAcrossTileBoundaries() throws {
+        let env = try XCTUnwrap(Self.env)
+        let body = try TestSupport.tokenFixtures().flatMap { $0.tokens.dropFirst().dropLast() }
+        let savedSchedule = env.forward.schedule
+        defer { env.forward.schedule = savedSchedule }
+        for queries in KernelSchedule.attentionQueryCandidates {
+            env.forward.schedule.attentionQueries = queries
+            for count in [2, 15, 16, 17, 31, 32, 33, 63, 64, 65] {
+                let subject = [env.tokenizer.bosId] + Array(body.prefix(count - 2)) + [env.tokenizer.eosId]
+                var packed = PackedBatch()
+                packed.append(Array(body.prefix(19)))
+                packed.append(subject)
+                packed.append(Array(body.prefix(97)))
+                let inBatch = try env.forward.run(packed)[1]
+                var alone = PackedBatch()
+                alone.append(subject)
+                let single = try env.forward.run(alone)[0]
+                XCTAssertEqual(single.map(\.bitPattern), inBatch.map(\.bitPattern),
+                               "\(count) tokens and \(queries) attention queries must match after reusing a larger workspace")
+            }
+        }
+    }
+
     func testFullBatchesAndAutotuneUseTheScheduleGemmTile() {
         let schedule = KernelSchedule(gemmTile: GemmTile(rows: 64, columns: 128, depth: 16, simdgroups: 8))
         for rows in [MetalForward.paddedRows(6000), 8192] {

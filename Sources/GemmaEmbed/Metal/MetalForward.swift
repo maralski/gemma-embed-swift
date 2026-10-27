@@ -176,6 +176,10 @@ final class MetalForward: @unchecked Sendable {
         max(rowAlignment, (tokens + rowAlignment - 1) / rowAlignment * rowAlignment)
     }
 
+    static func textGemmRows(_ tokens: Int) -> Int {
+        tokens < rowAlignment ? tokens : paddedRows(tokens)
+    }
+
     /// Pooled, unnormalised output vectors, one per sequence in the batch. The batch's vector rows
     /// refer to the vision tower's output over `images`, in order, run in the same command buffer.
     func run(_ batch: PackedBatch, images: VisionBatch? = nil, audio: AudioBatch? = nil) throws -> [[Float]] {
@@ -348,6 +352,7 @@ final class MetalForward: @unchecked Sendable {
         let info = config.info
         let d = info.hiddenSize
         let N = batch.tokenCount
+        let gemmRows = vectors == nil ? MetalForward.textGemmRows(N) : paddedRows
         let eps = info.normEpsilon
         let k = Kernels(forward: self, encoder: enc)
 
@@ -362,10 +367,10 @@ final class MetalForward: @unchecked Sendable {
 
             let pl = info.perLayerInputSize
             try k.together {
-                try k.gemm(ws.h, weight: w.wq, out: ws.q, rows: paddedRows, outputs: qDim, inputs: d)
-                try k.gemm(ws.h, weight: w.wk, out: ws.k, rows: paddedRows, outputs: kvDim, inputs: d)
-                try k.gemm(ws.h, weight: w.wv, out: ws.v, rows: paddedRows, outputs: kvDim, inputs: d)
-                try k.gemm(ws.x0, weight: weights.perLayerProj, weightRowOffset: layer.index * pl, out: ws.tmp, rows: paddedRows, outputs: pl, inputs: d)
+                try k.gemm(ws.h, weight: w.wq, out: ws.q, rows: gemmRows, outputs: qDim, inputs: d)
+                try k.gemm(ws.h, weight: w.wk, out: ws.k, rows: gemmRows, outputs: kvDim, inputs: d)
+                try k.gemm(ws.h, weight: w.wv, out: ws.v, rows: gemmRows, outputs: kvDim, inputs: d)
+                try k.gemm(ws.x0, weight: weights.perLayerProj, weightRowOffset: layer.index * pl, out: ws.tmp, rows: gemmRows, outputs: pl, inputs: d)
             }
             let rope = ropeTables[hd]!
             try k.together {
@@ -378,22 +383,22 @@ final class MetalForward: @unchecked Sendable {
                             heads: heads, kvHeads: kvHeads, headDim: hd,
                             halfWindow: layer.isSlidingWindow ? info.slidingWindow / 2 : 0, scale: 1)
             if layer.index == stopAfterAttention { return }
-            try k.gemm(ws.attn, weight: w.wo, out: ws.tmp, rows: paddedRows, outputs: d, inputs: qDim)
+            try k.gemm(ws.attn, weight: w.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: qDim)
             try k.rmsNormResidualNorm(ws.x, add: ws.tmp, weight: w.postAttnNorm, out: ws.h, outWeight: w.ffnNorm, rows: N, width: d, eps: eps)
 
-            try k.gemm(ws.h, weight: w.wGate, out: ws.gate, rows: paddedRows, outputs: info.feedForwardSize, inputs: d)
-            try k.gemm(ws.h, weight: w.wUp, out: ws.up, rows: paddedRows, outputs: info.feedForwardSize, inputs: d, epilogue: .geglu(gate: ws.gate))
-            try k.gemm(ws.up, weight: w.wDown, out: ws.tmp, rows: paddedRows, outputs: d, inputs: info.feedForwardSize)
+            try k.gemm(ws.h, weight: w.wGate, out: ws.gate, rows: gemmRows, outputs: info.feedForwardSize, inputs: d)
+            try k.gemm(ws.h, weight: w.wUp, out: ws.up, rows: gemmRows, outputs: info.feedForwardSize, inputs: d, epilogue: .geglu(gate: ws.gate))
+            try k.gemm(ws.up, weight: w.wDown, out: ws.tmp, rows: gemmRows, outputs: d, inputs: info.feedForwardSize)
             try k.rmsNormResidual(ws.x, add: ws.tmp, weight: w.postFfnNorm, rows: N, width: d, eps: eps)
 
-            try k.gemm(ws.x, weight: w.inpGate, out: ws.tmp, rows: paddedRows, outputs: pl, inputs: d, epilogue: .geluTimes(factor: ws.ple))
-            try k.gemm(ws.tmp, weight: w.proj, out: ws.tmp2, rows: paddedRows, outputs: d, inputs: pl)
+            try k.gemm(ws.x, weight: w.inpGate, out: ws.tmp, rows: gemmRows, outputs: pl, inputs: d, epilogue: .geluTimes(factor: ws.ple))
+            try k.gemm(ws.tmp, weight: w.proj, out: ws.tmp2, rows: gemmRows, outputs: d, inputs: pl)
             let nextNorm = layer.index + 1 < config.layers.count ? weights.layers[layer.index + 1].attnNorm : weights.outputNorm
             try k.rmsNormResidualNorm(ws.x, add: ws.tmp2, weight: w.postNorm, out: ws.h, outWeight: nextNorm, rows: N, width: d, eps: eps,
                                       scale: w.outScale)
         }
 
-        try k.gemm(ws.h, weight: weights.output, out: ws.out, rows: paddedRows, outputs: info.outputDimensions, inputs: d)
+        try k.gemm(ws.h, weight: weights.output, out: ws.out, rows: gemmRows, outputs: info.outputDimensions, inputs: d)
         try k.meanPool(ws.out, sequences: ws.sequences, count: batch.sequences.count, out: ws.pooled, width: info.outputDimensions)
     }
 }
@@ -488,11 +493,13 @@ struct Kernels {
         case gegluQuick(gate: MTLBuffer)
     }
 
-    /// `out = x * weight^T`, optionally followed by an elementwise epilogue.
+    /// `out = x * weight^T`, optionally followed by an elementwise epilogue. Buffers must hold
+    /// `rows` rounded up to the selected tile's row count.
     func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, outRowOffset: Int = 0, rows: Int, outputs: Int, inputs: Int,
               tile: GemmTile? = nil, epilogue: Epilogue = .store) throws {
         let tile = tile ?? forward.schedule.gemmTile(rows: rows, outputs: outputs, inputs: inputs)
-        precondition(rows % tile.rows == 0 && outputs % tile.columns == 0 && inputs % tile.depth == 0 && weight.columns == inputs)
+        let dispatchRows = (rows + tile.rows - 1) / tile.rows * tile.rows
+        precondition(outputs % tile.columns == 0 && inputs % tile.depth == 0 && weight.columns == inputs)
         let format: String
         switch weight.type {
         case .q8_0: format = "q8"
@@ -513,9 +520,9 @@ struct Kernels {
         encoder.setBuffer(x, offset: 0, index: 0)
         encoder.setBuffer(weights, offset: weight.fileOffset + weightRowOffset * weight.rowBytes, index: 1)
         encoder.setBuffer(out, offset: outRowOffset * outputs * 4, index: 2)
-        setBytes(GemmParams(M: UInt32(rows), N: UInt32(outputs), K: UInt32(inputs), weightRowBytes: UInt32(weight.rowBytes)), index: 3)
+        setBytes(GemmParams(M: UInt32(dispatchRows), N: UInt32(outputs), K: UInt32(inputs), weightRowBytes: UInt32(weight.rowBytes)), index: 3)
         encoder.setBuffer(aux, offset: 0, index: 4)
-        dispatch(groups: MTLSize(width: outputs / tile.columns, height: rows / tile.rows, depth: 1), perGroup: MTLSize(width: tile.threads, height: 1, depth: 1))
+        dispatch(groups: MTLSize(width: outputs / tile.columns, height: dispatchRows / tile.rows, depth: 1), perGroup: MTLSize(width: tile.threads, height: 1, depth: 1))
     }
 
     func gemm3(_ x: MTLBuffer, weights w: (WeightTensor, WeightTensor, WeightTensor), outs: (MTLBuffer, MTLBuffer, MTLBuffer),

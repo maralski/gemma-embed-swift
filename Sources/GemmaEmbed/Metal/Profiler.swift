@@ -21,6 +21,7 @@ public enum Profiler {
         for t in texts { batch.append(model.tokenizer.encode(TaskPrefix.document.prefix + t)) }
         let N = batch.tokenCount
         let padded = MetalForward.paddedRows(N)
+        let gemmRows = MetalForward.textGemmRows(N)
         let ws = try forward.workspace(forRows: padded)
         ws.tokens.write(batch.tokens)
         ws.positions.write(batch.positions)
@@ -60,13 +61,13 @@ public enum Profiler {
         samples.append(Sample(name: "whole forward (gpu)", seconds: gpu, note: "\(N) tokens"))
 
         let l0 = weights.layers[0], l5 = weights.layers[5]
-        try time("gemm q8 512->1024 (q, sliding)", note: "20 sliding layers") { k in try k.gemm(ws.h, weight: l0.wq, out: ws.q, rows: padded, outputs: 1024, inputs: d) }
-        try time("gemm q8 512->512 (k/v/gate/proj)", note: "x6 per layer") { k in try k.gemm(ws.h, weight: l0.wk, out: ws.k, rows: padded, outputs: 512, inputs: d) }
-        try time("gemm q8 1024->512 (o, sliding)", note: "") { k in try k.gemm(ws.attn, weight: l0.wo, out: ws.tmp, rows: padded, outputs: d, inputs: 1024) }
-        try time("gemm q8 512->2048 (ffn gate/up)", note: "x2 per layer") { k in try k.gemm(ws.h, weight: l0.wGate, out: ws.gate, rows: padded, outputs: 2048, inputs: d) }
-        try time("gemm q8 2048->512 (ffn down)", note: "") { k in try k.gemm(ws.gate, weight: l0.wDown, out: ws.tmp, rows: padded, outputs: d, inputs: 2048) }
-        try time("gemm q8 512->2048 (q, global)", note: "x4 layers") { k in try k.gemm(ws.h, weight: l5.wq, out: ws.q, rows: padded, outputs: 2048, inputs: d) }
-        try time("gemm bf16 512->512 (per-layer proj)", note: "") { k in try k.gemm(ws.x0, weight: weights.perLayerProj, weightRowOffset: 0, out: ws.tmp, rows: padded, outputs: 512, inputs: d) }
+        try time("gemm q8 512->1024 (q, sliding)", note: "20 sliding layers") { k in try k.gemm(ws.h, weight: l0.wq, out: ws.q, rows: gemmRows, outputs: 1024, inputs: d) }
+        try time("gemm q8 512->512 (k/v/gate/proj)", note: "x6 per layer") { k in try k.gemm(ws.h, weight: l0.wk, out: ws.k, rows: gemmRows, outputs: 512, inputs: d) }
+        try time("gemm q8 1024->512 (o, sliding)", note: "") { k in try k.gemm(ws.attn, weight: l0.wo, out: ws.tmp, rows: gemmRows, outputs: d, inputs: 1024) }
+        try time("gemm q8 512->2048 (ffn gate/up)", note: "x2 per layer") { k in try k.gemm(ws.h, weight: l0.wGate, out: ws.gate, rows: gemmRows, outputs: 2048, inputs: d) }
+        try time("gemm q8 2048->512 (ffn down)", note: "") { k in try k.gemm(ws.gate, weight: l0.wDown, out: ws.tmp, rows: gemmRows, outputs: d, inputs: 2048) }
+        try time("gemm q8 512->2048 (q, global)", note: "x4 layers") { k in try k.gemm(ws.h, weight: l5.wq, out: ws.q, rows: gemmRows, outputs: 2048, inputs: d) }
+        try time("gemm bf16 512->512 (per-layer proj)", note: "") { k in try k.gemm(ws.x0, weight: weights.perLayerProj, weightRowOffset: 0, out: ws.tmp, rows: gemmRows, outputs: 512, inputs: d) }
         try time("rmsnorm 512", note: "x1 per layer") { k in try k.rmsNorm(ws.x, out: ws.h, weight: l0.attnNorm, rows: N, width: d, eps: eps) }
         try time("rmsnorm heads 256", note: "") { k in try k.rmsNorm(ws.q, out: ws.q, weight: l0.qNorm, rows: N * 4, width: 256, eps: eps) }
         let rope = forward.ropeTable(headDim: 256)
