@@ -107,3 +107,13 @@ struct PoolPatchParams {
     uint merge;
     float scale;
 };
+
+kernel void validate_float8x8_fragment_layout(device float* output [[buffer(0)]],
+                                             uint lane [[thread_index_in_simdgroup]]) {
+    const uint fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+    const uint fn = ((lane / 4) & 2) * 2 + (lane % 2) * 2;
+    simdgroup_float8x8 matrix;
+    matrix.thread_elements()[0] = float(fm * 8 + fn);
+    matrix.thread_elements()[1] = float(fm * 8 + fn + 1);
+    simdgroup_store(matrix, output, 8);
+}
