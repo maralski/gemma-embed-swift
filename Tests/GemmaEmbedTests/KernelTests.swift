@@ -134,7 +134,6 @@ final class KernelTests: XCTestCase {
                 let x = try buffer(rng.floats(padded * inputs, scale: 2))
                 let aux = try buffer(rng.floats(padded * outputs, scale: 4))
                 for epilogue in [Kernels.Epilogue.store, .geglu(gate: aux), .geluTimes(factor: aux)] {
-                    // Include an offset and trailing sentinel to detect output indexing changes.
                     let count = (padded + 2) * outputs
                     let candidate = try buffer([Float](repeating: -777, count: count))
                     let original = try buffer([Float](repeating: -777, count: count))

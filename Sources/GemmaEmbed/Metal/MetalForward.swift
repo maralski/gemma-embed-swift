@@ -510,8 +510,7 @@ struct Kernels {
         case gegluQuick(gate: MTLBuffer)
     }
 
-    /// `out = x * weight^T`, optionally followed by an elementwise epilogue. Buffers must hold
-    /// `rows` rounded up to the selected tile's row count.
+    /// `out = x * weight^T`, optionally followed by an elementwise epilogue.
     func gemm(_ x: MTLBuffer, weight: WeightTensor, weightRowOffset: Int = 0, out: MTLBuffer, outRowOffset: Int = 0, rows: Int, outputs: Int, inputs: Int,
               tile: GemmTile? = nil, epilogue: Epilogue = .store) throws {
         let requestedTile = tile
@@ -552,7 +551,6 @@ struct Kernels {
         return true
     }
 
-    /// Short text FFN projection. Buffers hold rows rounded up to eight.
     func gemmGeglu(_ x: MTLBuffer, gate: WeightTensor, up: WeightTensor, out: MTLBuffer,
                    rows: Int, outputs: Int, inputs: Int) throws {
         precondition(rows > 0 && rows <= 16 && outputs % 16 == 0 && inputs % 32 == 0)

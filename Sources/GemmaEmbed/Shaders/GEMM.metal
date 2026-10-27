@@ -215,7 +215,6 @@ GEMM_TILE("64x128x16s4", 64, 128, 16, 4)
 
 GEMM_TILE("8x16x32s2", 8, 16, 32, 2)
 
-// Two independent 8x8 SIMD groups retain the short-text 8x16 dispatch shape.
 // Each lane owns (fm, fn) and (fm, fn + 1) in every 8x8 fragment.
 template <typename Epi>
 kernel void gemm_q8_register_kernel(device const float* X [[buffer(0)]],
@@ -252,7 +251,6 @@ kernel void gemm_q8_register_kernel(device const float* X [[buffer(0)]],
         }
     }
 
-    // Preserve the existing float4 epilogues and their output ordering.
     threadgroup float output[8 * 20];
     simdgroup_store(acc, output + sgid * 8, 20);
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -273,8 +271,6 @@ GEMM_Q8_REGISTER_VARIANT("gemm_q8_register_8x16x32s2", EpiStore)
 GEMM_Q8_REGISTER_VARIANT("gemm_q8_geglu_register_8x16x32s2", EpiGeglu)
 GEMM_Q8_REGISTER_VARIANT("gemm_q8_gelutimes_register_8x16x32s2", EpiGeluTimes)
 
-// Share each X fragment between the FFN projections without changing either
-// accumulator's K order or staging inputs in threadgroup memory.
 kernel void gemm_q8_dual_geglu_register_8x16x32s2(
     device const float* X [[buffer(0)]],
     device const uchar* Wgate [[buffer(1)]],
