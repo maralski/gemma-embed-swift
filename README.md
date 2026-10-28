@@ -29,7 +29,7 @@ Add the package to `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maralski/gemma-embed-swift.git", from: "0.4.0"),
+    .package(url: "https://github.com/maralski/gemma-embed-swift.git", from: "0.4.1"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: [.product(name: "GemmaEmbed", package: "gemma-embed-swift")]),
@@ -412,7 +412,8 @@ M3 Max with 16 CPU cores, 40 GPU cores and 128 GiB memory. The comparator is lla
 
 The text results below measure the code merged in [PR #2](https://github.com/maralski/gemma-embed-swift/pull/2),
 following the short-text changes in [PR #1](https://github.com/maralski/gemma-embed-swift/pull/1).
-These tables describe `main` at `b0e1dd8`; the `0.4.0` release predates the text changes.
+These tables describe the implementation at `b0e1dd8`, included in `0.4.1`.
+The `0.4.0` release predates the text changes.
 Each value is llama.cpp median suite wall time divided by GemmaEmbed median suite wall time
 in one seven-sample run. Higher values favor GemmaEmbed. The query suite makes twelve
 individual calls with 13 to 16 tokens each; its time is not a single-query latency percentile.
