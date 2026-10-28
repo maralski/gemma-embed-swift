@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.1 (2026-10-28)
+
+Text performance improvements and direct llama.cpp benchmark results.
+
+- Short text uses smaller GEMM tiles, fewer padded rows, direct Q8 operand loads into FP32
+  registers and shared activation loads for eligible gate and up projections.
+- Larger text batches select register GEMM tiles by shape and use direct key loading in
+  attention. Explicit tile and schedule overrides keep their existing behavior.
+- The Metal context checks the matrix-fragment layout once at startup.
+- Text APIs, model files, precision and native raw and normalized output bits are preserved.
+- README and COMPARISON replace the previous server-based performance tables with the text,
+  image and audio hill-climb results against in-process llama.cpp. They include all final
+  runs, comparator settings, timing boundaries and quality checks.
+- `benchmarks/hillclimb-2026-10-27.json` contains 1,344 recorded timings. COMPARISON provides
+  an arithmetic replay command. The image and audio campaigns retained their existing native
+  implementations; their universal 1.50× targets were not met.
+- Includes [#1](https://github.com/maralski/gemma-embed-swift/pull/1),
+  [#2](https://github.com/maralski/gemma-embed-swift/pull/2) and
+  [#3](https://github.com/maralski/gemma-embed-swift/pull/3).
+
 ## 0.4.0 (2026-10-26)
 
 Audio embeddings, in the same 768-dimensional space as the text and image embeddings.
